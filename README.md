@@ -45,7 +45,7 @@
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ 
+- Node.js 22+ 
 - pnpm (recommended) or npm/yarn
 
 ### Installation
@@ -204,7 +204,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
-- [Live Demo](https://luckylight6.github.io/json-pilot/) (Coming Soon)
+- [Live Demo](https://luckylight6.github.io/json-pilot/) 
 - [Report Issues](https://github.com/LuckyLight6/json-pilot/issues)
 - [Request Features](https://github.com/LuckyLight6/json-pilot/issues/new)
 
