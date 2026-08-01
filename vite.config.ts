@@ -4,6 +4,33 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 
+export const vendorChunkForModule = (id: string): string | undefined => {
+  const normalizedId = id.replaceAll('\\', '/')
+  const dependencyRoot = '/node_modules/'
+
+  if (!normalizedId.includes(dependencyRoot)) return undefined
+
+  // Monaco dominates the bundle; splitting it lets the shell paint first.
+  if (
+    normalizedId.includes(`${dependencyRoot}monaco-editor/`) ||
+    normalizedId.includes(`${dependencyRoot}@monaco-editor/react/`)
+  ) {
+    return 'monaco'
+  }
+
+  // Match package directory boundaries. A broad "/react" check also catches
+  // React consumers and can force a circular react <-> vendor chunk graph.
+  if (
+    normalizedId.includes(`${dependencyRoot}react/`) ||
+    normalizedId.includes(`${dependencyRoot}react-dom/`) ||
+    normalizedId.includes(`${dependencyRoot}scheduler/`)
+  ) {
+    return 'react'
+  }
+
+  return 'vendor'
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   // Relative asset URLs so the build works from any sub-path, including the
@@ -26,13 +53,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 4000,
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          if (!id.includes('node_modules')) return undefined
-          // Monaco dominates the bundle; splitting it lets the shell paint first.
-          if (id.includes('monaco-editor')) return 'monaco'
-          if (id.includes('/react') || id.includes('/scheduler')) return 'react'
-          return 'vendor'
-        },
+        manualChunks: vendorChunkForModule,
       },
     },
   },
