@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>JSON Pilot</title>
+  <!--
+    One asset for both the browser tab and the app header, so the two always
+    match. An app tile, because the silhouette is what survives at 16px, with a
+    single idea inside it: a brace pair holding one value.
+
+    The tile bleeds to the viewBox edge on purpose: a transparent margin turns
+    into a sub-pixel white halo once the favicon is rasterised at 16px.
+
+    Deliberately not a plane, braces plus a plane, or braces plus a bar — all
+    three were drawn and rendered down to 16px, and each either mushed at small
+    sizes or (the bar) read as a minus and collided with the fold markers.
+  -->
+  <style>
+    :root { --tile: #4F46E5; }
+    @media (prefers-color-scheme: dark) {
+      /* A darker tile in dark UIs, so the icon never reads as a light blob. */
+      :root { --tile: #4338CA; }
+    }
+  </style>
+  <rect width="64" height="64" rx="14" fill="var(--tile)" />
+  <g
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="5.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M28 16q-6 0-6 6v3q0 4-4 5 4 1 4 5v3q0 6 6 6" />
+    <path d="M36 16q6 0 6 6v3q0 4 4 5-4 1-4 5v3q0 6-6 6" />
+  </g>
+  <circle cx="32" cy="32" r="3.6" fill="#FFFFFF" />
+</svg>
