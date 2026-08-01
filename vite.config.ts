@@ -20,6 +20,10 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
   },
   build: {
+    // Monaco is intentionally isolated below and currently weighs about
+    // 3.9 MB minified (about 1 MB gzip). Keep a tight ceiling around that
+    // known editor asset so unrelated bundle growth still remains visible.
+    chunkSizeWarningLimit: 4000,
     rollupOptions: {
       output: {
         manualChunks: (id) => {
