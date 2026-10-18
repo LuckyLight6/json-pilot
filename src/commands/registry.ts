@@ -32,12 +32,14 @@ export interface CommandDefinition {
   id: CommandId
   labelKey: MessageKey
   /**
-   * Portable binding, `Mod` meaning Cmd on macOS and Ctrl elsewhere.
+   * Portable binding, `Mod` meaning Cmd on macOS and Ctrl elsewhere. Every
+   * command ships with one; users can still remove theirs in the dialog.
    *
-   * Defaults are single `Alt+Shift+<letter>` chords: two-key `Mod+K` sequences
-   * avoid conflicts but are tiring to type, and `Alt+Shift` is both free in
-   * browsers and already the shape VS Code uses for `Alt+Shift+F`. The handful
-   * of Monaco defaults this shadows are unbound in `monaco/setup.ts`.
+   * Defaults follow VS Code wherever it has one — `Alt+Shift+F`, `Mod+K Mod+0`,
+   * `Alt+Z`, `F8` — since that is the editor JSON Pilot is built on. Where VS
+   * Code's key is one browsers reserve for themselves (`Mod+N`, `Mod+W`, tab
+   * switching), the default adds `Alt` to the same shape. The remaining
+   * JSON-specific actions keep the `Alt+Shift+<letter>` family of Format.
    */
   defaultBinding: string
   run: () => void
@@ -58,6 +60,15 @@ const preferences = () => usePreferencesStore.getState()
 let showShortcuts: () => void = () => {}
 export function setShortcutsOpener(open: () => void): void {
   showShortcuts = open
+}
+
+/** Set by `ClearDocumentDialog`: clearing always asks first, however it is invoked. */
+let requestClearImpl: () => void = () => {}
+export function setClearRequester(request: () => void): void {
+  requestClearImpl = request
+}
+export function requestClear(): void {
+  requestClearImpl()
 }
 
 /** Set by `ThemeProvider`'s consumer — the theme lives in React context. */
@@ -83,8 +94,9 @@ export const COMMANDS: CommandDefinition[] = [
     defaultBinding: 'Alt+Shift+R',
     run: () => editor().sortKeys('desc'),
   },
-  { id: 'document.copy', labelKey: 'action.copy', defaultBinding: 'Alt+Shift+C', run: () => editor().copy() },
-  { id: 'document.clear', labelKey: 'action.clear', defaultBinding: 'Alt+Shift+Backspace', run: () => editor().clear() },
+  { id: 'document.copy', labelKey: 'action.copyDocument', defaultBinding: 'Alt+Shift+C', run: () => editor().copy() },
+  // Safe to bind: clearing always asks first (see ClearDocumentDialog).
+  { id: 'document.clear', labelKey: 'action.clear', defaultBinding: 'Alt+Shift+Backspace', run: () => requestClear() },
   {
     id: 'document.loadSample',
     labelKey: 'empty.loadSample',
@@ -92,8 +104,8 @@ export const COMMANDS: CommandDefinition[] = [
     run: () => editor().loadSample(),
   },
 
-  { id: 'editor.foldAll', labelKey: 'action.foldAll', defaultBinding: 'Alt+Shift+[', run: () => editor().foldAll() },
-  { id: 'editor.unfoldAll', labelKey: 'action.unfoldAll', defaultBinding: 'Alt+Shift+]', run: () => editor().unfoldAll() },
+  { id: 'editor.foldAll', labelKey: 'action.foldAll', defaultBinding: 'Mod+K Mod+0', run: () => editor().foldAll() },
+  { id: 'editor.unfoldAll', labelKey: 'action.unfoldAll', defaultBinding: 'Mod+K Mod+J', run: () => editor().unfoldAll() },
   {
     id: 'editor.goToFirstError',
     labelKey: 'status.jumpToError',
@@ -113,23 +125,23 @@ export const COMMANDS: CommandDefinition[] = [
     defaultBinding: 'Alt+Shift+B',
     run: () => preferences().setToolbarStyle(cycle(TOOLBAR_STYLES, preferences().toolbarStyle)),
   },
-  { id: 'view.cycleTheme', labelKey: 'theme.toggle', defaultBinding: 'Alt+Shift+L', run: () => cycleThemeImpl() },
+  { id: 'view.cycleTheme', labelKey: 'theme.toggle', defaultBinding: 'Mod+K Mod+T', run: () => cycleThemeImpl() },
 
-  { id: 'tabs.new', labelKey: 'tab.newDocument', defaultBinding: 'Alt+Shift+T', run: () => editor().openDocumentTab() },
+  { id: 'tabs.new', labelKey: 'tab.newDocument', defaultBinding: 'Mod+Alt+N', run: () => editor().openDocumentTab() },
   {
     id: 'tabs.newCompare',
     labelKey: 'tab.newCompare',
-    defaultBinding: 'Alt+Shift+D',
+    defaultBinding: 'Mod+K D',
     run: () => editor().openCompareTab(),
   },
   {
     id: 'tabs.close',
     labelKey: 'tab.close',
-    defaultBinding: 'Alt+Shift+W',
+    defaultBinding: 'Mod+Alt+W',
     run: () => editor().closeTab(editor().activeTabId),
   },
-  { id: 'tabs.next', labelKey: 'tab.next', defaultBinding: 'Alt+Shift+N', run: () => stepTab(1) },
-  { id: 'tabs.previous', labelKey: 'tab.previous', defaultBinding: 'Alt+Shift+P', run: () => stepTab(-1) },
+  { id: 'tabs.next', labelKey: 'tab.next', defaultBinding: 'Mod+Alt+PageDown', run: () => stepTab(1) },
+  { id: 'tabs.previous', labelKey: 'tab.previous', defaultBinding: 'Mod+Alt+PageUp', run: () => stepTab(-1) },
 
   {
     id: 'compare.swapPanes',
@@ -141,7 +153,7 @@ export const COMMANDS: CommandDefinition[] = [
   {
     id: 'query.focus',
     labelKey: 'query.focus',
-    defaultBinding: 'Alt+Shift+Q',
+    defaultBinding: 'Mod+Shift+F',
     run: () => document.getElementById(QUERY_INPUT_ID)?.focus(),
   },
   {

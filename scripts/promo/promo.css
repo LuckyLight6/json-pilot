@@ -1,0 +1,696 @@
+/*
+ * A fixed 1280×800 stage, rendered at 1.75× by scripts/render-promo.mjs.
+ * Dark by default; `?theme=light` sets `data-theme="light"` and the overrides
+ * at the end of this file.
+ */
+
+:root {
+  --bg: #060a12;
+  --panel: rgba(18, 24, 34, 0.82);
+  --panel-solid: #121822;
+  --line: rgba(240, 246, 252, 0.1);
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --faint: #6e7681;
+  --brand: #388bfd;
+  --brand-rgb: 56, 139, 253;
+  --brand-strong: #1f6feb;
+  --sky: #5ab8ff;
+  --tok-key: #79c0ff;
+  --tok-string: #7ee787;
+  --tok-number: #d2a8ff;
+  --tok-literal: #ff7b72;
+  --tok-punct: #8b949e;
+  --sans: -apple-system, 'SF Pro Display', 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  --keycap-border: rgba(240, 246, 252, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#stage {
+  position: relative;
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* --- Atmosphere ------------------------------------------------------------ */
+
+.grid {
+  position: absolute;
+  inset: -48px;
+  background-image:
+    linear-gradient(to right, rgba(240, 246, 252, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(240, 246, 252, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 75% 70% at 50% 45%, black 25%, transparent 80%);
+}
+
+.light {
+  position: absolute;
+  width: 1000px;
+  height: 1000px;
+  border-radius: 50%;
+  filter: blur(90px);
+}
+.light.blue {
+  background: radial-gradient(circle, rgba(31, 111, 235, 0.55), transparent 65%);
+}
+.light.sky {
+  background: radial-gradient(circle, rgba(90, 184, 255, 0.35), transparent 65%);
+}
+
+/* Breathes on the beat. */
+.pulse {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 55% at 50% 52%, rgba(56, 139, 253, 0.22), transparent 70%);
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  background: #cfe3ff;
+}
+
+.flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 55% 50% at 50% 50%, rgba(207, 227, 255, 0.5), transparent 70%);
+  pointer-events: none;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 85% 80% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+}
+
+/* --- Scenes ------------------------------------------------------------------ */
+
+.scene {
+  position: absolute;
+  inset: 0;
+}
+
+/* Everything in a scene sits on a slowly pushing-in camera. */
+.camera {
+  position: absolute;
+  inset: 0 0 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  perspective: 1800px;
+}
+
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 139, 253, 0.35);
+  background: rgba(56, 139, 253, 0.1);
+  color: #a5c8ff;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.kicker .index {
+  font-family: var(--mono);
+  color: var(--brand);
+  font-size: 13px;
+}
+
+.headline {
+  margin: 20px 0 0;
+  font-size: 58px;
+  line-height: 1.08;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  text-align: center;
+}
+.headline .word {
+  display: inline-block;
+  white-space: pre;
+}
+.headline .accent {
+  color: var(--sky);
+}
+
+/* --- Code cards ----------------------------------------------------------- */
+
+.card {
+  position: relative;
+  margin-top: 40px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow:
+    0 50px 100px -30px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(56, 139, 253, 0.06),
+    inset 0 1px 0 rgba(240, 246, 252, 0.07);
+  overflow: hidden;
+  transform-origin: 50% 0;
+}
+
+.sheen {
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 160px;
+  background: linear-gradient(100deg, transparent, rgba(207, 227, 255, 0.12), transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.card-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.card-bar .lights {
+  display: flex;
+  gap: 6px;
+  margin-right: 8px;
+}
+.card-bar .lights i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(240, 246, 252, 0.14);
+}
+
+.code {
+  position: relative;
+  padding: 16px 0;
+  font-family: var(--mono);
+  font-size: 20px;
+  line-height: 32px;
+  white-space: pre;
+}
+.code .row {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding-right: 28px;
+}
+.code .row .content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+/* A line that slides sideways inside its own clip, never under the gutter. */
+.code .row .scroll {
+  display: inline-block;
+}
+.gutter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  width: 76px;
+  padding-right: 18px;
+  color: var(--faint);
+  font-size: 15px;
+  flex: none;
+}
+.gutter .chip-slot {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+}
+
+.k {
+  color: var(--tok-key);
+}
+.s {
+  color: var(--tok-string);
+}
+.n {
+  color: var(--tok-number);
+}
+.l {
+  color: var(--tok-literal);
+}
+.p {
+  color: var(--tok-punct);
+}
+
+/* The Nested String Fold marker, as the editor draws it. */
+.fold-chip {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--brand);
+}
+.fold-chip::before,
+.fold-chip::after {
+  content: '';
+  position: absolute;
+  left: 3.5px;
+  top: 7px;
+  width: 9px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--panel-solid);
+}
+.fold-chip.plus::after {
+  transform: rotate(90deg);
+}
+.fold-chip.minus::after {
+  display: none;
+}
+.ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 6px;
+  border: 2px solid var(--brand);
+}
+
+.keys {
+  display: inline-flex;
+  gap: 10px;
+}
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  height: 58px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--keycap-border);
+  border-bottom-width: 4px;
+  background: linear-gradient(to bottom, #283141, #1a212c);
+  color: var(--text);
+  font-size: 25px;
+  font-weight: 600;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+
+.pointer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 28px;
+  height: 28px;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+  z-index: 5;
+}
+.click {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  border: 2px solid var(--sky);
+  z-index: 5;
+}
+
+/* --- Query --------------------------------------------------------------- */
+
+.command {
+  position: relative;
+  margin-top: 40px;
+  width: 840px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 74px;
+  padding: 0 14px 0 12px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 40px 90px -24px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+  transform-origin: 50% 0;
+}
+.modes {
+  position: relative;
+  display: flex;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(240, 246, 252, 0.05);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+.modes span {
+  position: relative;
+  z-index: 1;
+  padding: 7px 12px;
+  color: var(--muted);
+}
+.modes .pill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 9px;
+  background: rgba(56, 139, 253, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(56, 139, 253, 0.45);
+}
+.typed {
+  position: relative;
+  flex: 1;
+  height: 34px;
+  font-family: var(--mono);
+  font-size: 23px;
+  line-height: 34px;
+}
+.typed .text {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  white-space: pre;
+}
+.caret {
+  position: absolute;
+  top: 4px;
+  width: 2px;
+  height: 26px;
+  background: var(--sky);
+}
+.results {
+  position: relative;
+  margin-top: 30px;
+  width: 840px;
+  height: 240px;
+}
+.result-pill {
+  position: absolute;
+  padding: 18px 30px;
+  border-radius: 16px;
+  border: 1px solid rgba(126, 231, 135, 0.38);
+  background: rgba(46, 160, 67, 0.13);
+  color: var(--tok-string);
+  font-family: var(--mono);
+  font-size: 31px;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.75);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(240, 246, 252, 0.06);
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 500;
+}
+.badge b {
+  color: var(--text);
+  font-family: var(--mono);
+}
+.big-number {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 20px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 160px;
+  font-weight: 600;
+  color: var(--tok-number);
+  text-shadow: 0 0 70px rgba(210, 168, 255, 0.4);
+}
+
+/* --- Compare ------------------------------------------------------------- */
+
+.compare {
+  margin-top: 40px;
+  display: flex;
+  gap: 24px;
+  perspective: 1800px;
+}
+.compare .card {
+  margin-top: 0;
+  width: 480px;
+}
+.diff-row {
+  position: relative;
+}
+.diff-row .wash {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+}
+.diff-row.removed .wash {
+  background: rgba(248, 81, 73, 0.17);
+  box-shadow: inset 3px 0 0 rgba(248, 81, 73, 0.95);
+}
+.diff-row.added .wash {
+  background: rgba(46, 160, 67, 0.2);
+  box-shadow: inset 3px 0 0 rgba(63, 185, 80, 0.95);
+}
+.diff-row > :not(.wash) {
+  position: relative;
+}
+
+/* --- Chapter bar ------------------------------------------------------------ */
+
+.chapters {
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  display: flex;
+  gap: 18px;
+  transform: translateX(-50%);
+}
+.chapter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 150px;
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.chapter .track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(240, 246, 252, 0.1);
+  overflow: hidden;
+}
+.chapter .fill {
+  height: 100%;
+  background: var(--brand);
+  transform-origin: left center;
+}
+
+/* --- Intro & outro ---------------------------------------------------------- */
+
+.logo {
+  position: relative;
+  width: 136px;
+  height: 136px;
+}
+.logo svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.logo .halo {
+  position: absolute;
+  inset: -60%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(56, 139, 253, 0.45), transparent 62%);
+  filter: blur(10px);
+}
+.wordmark {
+  margin-top: 30px;
+  font-size: 90px;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  display: flex;
+}
+.wordmark span {
+  display: inline-block;
+  white-space: pre;
+}
+.tagline {
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.chips {
+  margin-top: 34px;
+  display: flex;
+  gap: 12px;
+}
+.chips span {
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(240, 246, 252, 0.06);
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 500;
+}
+.url {
+  margin-top: 30px;
+  font-family: var(--mono);
+  font-size: 20px;
+  color: var(--sky);
+}
+
+.curtain {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  pointer-events: none;
+}
+
+/* Preview only: the play button for ?play. */
+.play-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: rgba(6, 10, 18, 0.7);
+  color: var(--text);
+  font: 600 20px var(--sans);
+  cursor: pointer;
+}
+
+/* --- Light theme ------------------------------------------------------------- */
+
+/*
+ * The same film for a light page: paper-white panels on a pale canvas, the
+ * site's light syntax colours, and soft shadows where the dark film glows.
+ * Accent text uses the brand blue — the dark film's sky blue is too pale on white.
+ */
+:root[data-theme='light'] {
+  --bg: #f4f7fb;
+  --panel: rgba(255, 255, 255, 0.92);
+  --panel-solid: #ffffff;
+  --line: rgba(31, 35, 40, 0.1);
+  --text: #1f2328;
+  --muted: #59636e;
+  --faint: #818b98;
+  --brand: #0969da;
+  --brand-strong: #0550ae;
+  --brand-rgb: 9, 105, 218;
+  --sky: #0969da;
+  --tok-key: #0550ae;
+  --tok-string: #116329;
+  --tok-number: #8250df;
+  --tok-literal: #cf222e;
+  --tok-punct: #6e7781;
+  --keycap-border: rgba(31, 35, 40, 0.16);
+}
+[data-theme='light'] .grid {
+  background-image:
+    linear-gradient(to right, rgba(31, 35, 40, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(31, 35, 40, 0.05) 1px, transparent 1px);
+}
+[data-theme='light'] .light.blue {
+  background: radial-gradient(circle, rgba(9, 105, 218, 0.16), transparent 65%);
+}
+[data-theme='light'] .light.sky {
+  background: radial-gradient(circle, rgba(84, 174, 255, 0.3), transparent 65%);
+}
+[data-theme='light'] .pulse {
+  background: radial-gradient(ellipse 60% 55% at 50% 52%, rgba(9, 105, 218, 0.08), transparent 70%);
+}
+[data-theme='light'] .particle {
+  background: #0969da;
+}
+[data-theme='light'] .flash {
+  background: radial-gradient(ellipse 55% 50% at 50% 50%, rgba(84, 174, 255, 0.35), transparent 70%);
+}
+[data-theme='light'] .vignette {
+  background: radial-gradient(ellipse 85% 80% at 50% 50%, transparent 60%, rgba(31, 35, 40, 0.08));
+}
+[data-theme='light'] .kicker {
+  border-color: rgba(9, 105, 218, 0.28);
+  background: rgba(9, 105, 218, 0.07);
+  color: #0969da;
+}
+[data-theme='light'] .card {
+  box-shadow:
+    0 40px 90px -30px rgba(31, 35, 40, 0.28),
+    0 0 0 1px rgba(31, 35, 40, 0.04),
+    inset 0 1px 0 #ffffff;
+}
+[data-theme='light'] .sheen {
+  background: linear-gradient(100deg, transparent, rgba(84, 174, 255, 0.14), transparent);
+}
+[data-theme='light'] .card-bar .lights i {
+  background: rgba(31, 35, 40, 0.12);
+}
+[data-theme='light'] .keycap {
+  background: linear-gradient(to bottom, #ffffff, #eef1f5);
+  box-shadow: 0 18px 40px rgba(31, 35, 40, 0.18);
+}
+[data-theme='light'] .command {
+  box-shadow: 0 30px 70px -24px rgba(31, 35, 40, 0.28);
+}
+[data-theme='light'] .modes {
+  background: rgba(31, 35, 40, 0.05);
+}
+[data-theme='light'] .modes .pill {
+  background: rgba(9, 105, 218, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(9, 105, 218, 0.4);
+}
+[data-theme='light'] .result-pill {
+  border-color: rgba(26, 127, 55, 0.35);
+  background: rgba(26, 127, 55, 0.08);
+  box-shadow: 0 20px 50px -20px rgba(31, 35, 40, 0.3);
+}
+[data-theme='light'] .badge,
+[data-theme='light'] .chips span {
+  background: rgba(31, 35, 40, 0.04);
+}
+[data-theme='light'] .big-number {
+  text-shadow: 0 0 60px rgba(130, 80, 223, 0.25);
+}
+[data-theme='light'] .diff-row.removed .wash {
+  background: rgba(207, 34, 46, 0.1);
+  box-shadow: inset 3px 0 0 rgba(207, 34, 46, 0.85);
+}
+[data-theme='light'] .diff-row.added .wash {
+  background: rgba(26, 127, 55, 0.12);
+  box-shadow: inset 3px 0 0 rgba(26, 127, 55, 0.85);
+}
+[data-theme='light'] .chapter .track {
+  background: rgba(31, 35, 40, 0.1);
+}
+[data-theme='light'] .logo .halo {
+  background: radial-gradient(circle, rgba(9, 105, 218, 0.28), transparent 62%);
+}
+[data-theme='light'] .play-preview {
+  background: rgba(244, 247, 251, 0.75);
+}

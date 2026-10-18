@@ -77,6 +77,19 @@ const KNOWN_KEYS = new Set([
   ...Array.from({ length: 24 }, (_, i) => `F${i + 1}`),
 ])
 
+/**
+ * Fallback for key events that carry no physical key code: virtual keyboards,
+ * remote-desktop clients and automation tools often send `code: ''`. Only an
+ * unmodified character or a named key can be trusted here — the produced
+ * character changes with Shift, Alt and the layout, which is why the code is
+ * preferred whenever there is one.
+ */
+export function keyFromKeyValue(key: string): string | null {
+  if (key === ' ') return 'Space'
+  const candidate = key.length === 1 ? key.toUpperCase() : key
+  return KNOWN_KEYS.has(candidate) ? candidate : null
+}
+
 /** Parses `Mod+Shift+F`. Returns null for anything malformed or unknown. */
 export function parseChord(binding: string): KeyChord | null {
   const parts = binding.split('+').map((part) => part.trim())
@@ -128,7 +141,7 @@ export function serializeChord(chord: KeyChord): string {
  * *other* command key (Ctrl on macOS, Meta elsewhere) which we never claim.
  */
 export function chordFromEvent(
-  event: Pick<KeyboardEvent, 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'isComposing'>,
+  event: Pick<KeyboardEvent, 'code' | 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'isComposing'>,
   isMac: boolean,
 ): KeyChord | null {
   if (event.isComposing) return null
@@ -136,7 +149,8 @@ export function chordFromEvent(
   const foreignModifier = isMac ? event.ctrlKey : event.metaKey
   if (foreignModifier) return null
 
-  const key = keyFromCode(event.code)
+  const hasPhysicalKey = event.code !== '' && event.code !== 'Unidentified'
+  const key = hasPhysicalKey ? keyFromCode(event.code) : keyFromKeyValue(event.key)
   if (!key) return null
 
   return {
@@ -145,10 +159,6 @@ export function chordFromEvent(
     shift: event.shiftKey,
     key,
   }
-}
-
-export function chordsEqual(a: KeyChord, b: KeyChord): boolean {
-  return a.mod === b.mod && a.alt === b.alt && a.shift === b.shift && a.key === b.key
 }
 
 const MAC_SYMBOLS: Record<string, string> = {
@@ -161,10 +171,17 @@ const MAC_SYMBOLS: Record<string, string> = {
   Escape: '⎋',
   Tab: '⇥',
   Space: '␣',
+}
+
+/** Key names that read better spelled differently, on every platform. */
+const KEY_LABELS: Record<string, string> = {
   ArrowUp: '↑',
   ArrowDown: '↓',
   ArrowLeft: '←',
   ArrowRight: '→',
+  PageUp: 'PgUp',
+  PageDown: 'PgDn',
+  Escape: 'Esc',
 }
 
 const OTHER_NAMES: Record<string, string> = {
@@ -174,28 +191,39 @@ const OTHER_NAMES: Record<string, string> = {
 }
 
 /**
- * Renders a binding for display: `⇧⌘F` on macOS, `Ctrl+Shift+F` elsewhere.
- *
- * Modifier order is platform convention, not the order the binding was written
- * in: Apple puts Command last (⌥⇧⌘), Windows puts Ctrl first.
+ * The keys of one chord, one entry per keycap, in platform order: Apple puts
+ * Command last (⌥⇧⌘), Windows puts Ctrl first. Null for a malformed chord.
  */
-export function formatChord(binding: string, isMac: boolean): string {
+export function chordKeys(binding: string, isMac: boolean): string[] | null {
   const chord = parseChord(binding)
-  if (!chord) return binding
+  if (!chord) return null
 
-  const modifiers: string[] = []
+  const keys: string[] = []
   if (isMac) {
-    if (chord.alt) modifiers.push(MAC_SYMBOLS.Alt)
-    if (chord.shift) modifiers.push(MAC_SYMBOLS.Shift)
-    if (chord.mod) modifiers.push(MAC_SYMBOLS.Mod)
+    if (chord.alt) keys.push(MAC_SYMBOLS.Alt)
+    if (chord.shift) keys.push(MAC_SYMBOLS.Shift)
+    if (chord.mod) keys.push(MAC_SYMBOLS.Mod)
   } else {
-    if (chord.mod) modifiers.push(OTHER_NAMES.Mod)
-    if (chord.alt) modifiers.push(OTHER_NAMES.Alt)
-    if (chord.shift) modifiers.push(OTHER_NAMES.Shift)
+    if (chord.mod) keys.push(OTHER_NAMES.Mod)
+    if (chord.alt) keys.push(OTHER_NAMES.Alt)
+    if (chord.shift) keys.push(OTHER_NAMES.Shift)
   }
+  keys.push((isMac && MAC_SYMBOLS[chord.key]) || KEY_LABELS[chord.key] || chord.key)
+  return keys
+}
 
-  const key = (isMac && MAC_SYMBOLS[chord.key]) || chord.key
-  return isMac ? [...modifiers, key].join('') : [...modifiers, key].join('+')
+/** Renders a chord as text: `⇧⌘F` on macOS, `Ctrl+Shift+F` elsewhere. */
+export function formatChord(binding: string, isMac: boolean): string {
+  const keys = chordKeys(binding, isMac)
+  if (!keys) return binding
+  return keys.join(isMac ? '' : '+')
+}
+
+/** Keycaps for a whole binding, one list per chord: `Mod+K Mod+0` → [[⌘, K], [⌘, 0]]. */
+export function bindingKeys(binding: string, isMac: boolean): string[][] {
+  const sequence = parseBinding(binding)
+  if (!sequence) return []
+  return sequence.map((chord) => chordKeys(serializeChord(chord), isMac) ?? [])
 }
 
 /** True when the platform is macOS, where `Mod` means Cmd. */
@@ -234,15 +262,36 @@ export function formatBinding(binding: string, isMac: boolean): string {
   return sequence.map((chord) => formatChord(serializeChord(chord), isMac)).join(' ')
 }
 
-/** True when `chord` is the opening key of `binding` and more keys follow. */
-export function isPrefixOf(chord: KeyChord, binding: string): boolean {
-  const sequence = parseBinding(binding)
-  return sequence !== null && sequence.length > 1 && chordsEqual(sequence[0], chord)
+/**
+ * A keymap pre-parsed for dispatch, keyed by canonical chord text, so a key
+ * press resolves with map lookups instead of re-parsing every binding — the
+ * dispatcher sees every keystroke typed into the editor.
+ */
+export interface BindingIndex<Id extends string> {
+  /** Single-chord bindings: `Alt+Shift+F` → id. */
+  chords: Map<string, Id>
+  /** Two-chord bindings: `Mod+K M` → id. */
+  sequences: Map<string, Id>
+  /** Opening chords of the sequences; pressing one waits for the second. */
+  prefixes: Set<string>
 }
 
-/** True when `chords` is exactly `binding`. */
-export function matchesBinding(chords: KeySequence, binding: string): boolean {
-  const sequence = parseBinding(binding)
-  if (!sequence || sequence.length !== chords.length) return false
-  return sequence.every((chord, index) => chordsEqual(chord, chords[index]))
+/** Indexes `[id, binding]` pairs. When two ids share a binding, the first wins. */
+export function buildBindingIndex<Id extends string>(bindings: Iterable<readonly [Id, string]>): BindingIndex<Id> {
+  const index: BindingIndex<Id> = { chords: new Map(), sequences: new Map(), prefixes: new Set() }
+
+  for (const [id, binding] of bindings) {
+    const sequence = parseBinding(binding)
+    if (!sequence) continue
+    const [first, second] = sequence.map(serializeChord)
+    if (second === undefined) {
+      if (!index.chords.has(first)) index.chords.set(first, id)
+    } else {
+      const key = `${first} ${second}`
+      if (!index.sequences.has(key)) index.sequences.set(key, id)
+      index.prefixes.add(first)
+    }
+  }
+
+  return index
 }

@@ -1,13 +1,7 @@
 import { useEffect, useRef } from 'react'
 
-import { COMMANDS } from '@/commands/registry'
-import {
-  chordFromEvent,
-  isMacPlatform,
-  isPrefixOf,
-  matchesBinding,
-  type KeyChord,
-} from '@/lib/shortcuts'
+import { COMMANDS_BY_ID, type CommandId } from '@/commands/registry'
+import { chordFromEvent, isMacPlatform, serializeChord } from '@/lib/shortcuts'
 import { useKeybindingsStore } from '@/store/keybindings-store'
 
 /** How long a pending `Mod+K` waits for its second key before giving up. */
@@ -19,13 +13,21 @@ const IS_MAC = isMacPlatform()
  * Dispatches JSON Pilot commands from a single window-level capture listener.
  *
  * Capture is what makes this authoritative: Monaco's keybinding service listens
- * bubble-phase on each editor container, so window-capture always runs first and
- * `preventDefault` + `stopPropagation` stops the key ever reaching it. That also
- * means anything matched here must be a real command — swallowing a key Monaco
- * needed would break typing.
+ * bubble-phase on each editor container, so window-capture always runs first.
+ * A single-chord command is swallowed outright — `preventDefault` plus
+ * `stopPropagation` — so a shadowed Monaco binding never runs as well. That
+ * also means anything matched here must be a real command: swallowing a key
+ * Monaco needed would break typing.
+ *
+ * Sequences (`Mod+K Mod+0`) share their prefix with Monaco's own `Mod+K`
+ * sequences, so both keys are allowed through to Monaco: only the browser
+ * default is prevented. Monaco then completes or quietly cancels its own
+ * sequence, and every `Mod+K` combination JSON Pilot does not define keeps
+ * doing what it does in the editor.
  */
 export function useKeybindings(): void {
-  const pending = useRef<KeyChord | null>(null)
+  /** The opening chord of a sequence, in canonical text, while waiting for the second. */
+  const pending = useRef<string | null>(null)
   const pendingTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
@@ -34,37 +36,38 @@ export function useKeybindings(): void {
       pending.current = null
     }
 
+    const run = (id: CommandId) => COMMANDS_BY_ID.get(id)?.run()
+
     const onKeyDown = (event: KeyboardEvent) => {
       const chord = chordFromEvent(event, IS_MAC)
       if (!chord) return
 
-      const { bindingFor } = useKeybindingsStore.getState()
+      const key = serializeChord(chord)
+      const { index, recording } = useKeybindingsStore.getState()
+      if (recording) return
 
-      // Second key of a pending sequence.
       if (pending.current) {
-        const sequence = [pending.current, chord]
+        const id = index.sequences.get(`${pending.current} ${key}`)
         clearPending()
-        const command = COMMANDS.find((candidate) => matchesBinding(sequence, bindingFor(candidate.id)))
-        // Always swallow: the prefix was consumed, so the follow-up must not
-        // reach the editor as text even when it matches nothing.
-        event.preventDefault()
-        event.stopPropagation()
-        command?.run()
+        if (id) {
+          event.preventDefault()
+          run(id)
+        }
         return
       }
 
-      const exact = COMMANDS.find((candidate) => matchesBinding([chord], bindingFor(candidate.id)))
-      if (exact) {
+      const id = index.chords.get(key)
+      if (id) {
         event.preventDefault()
         event.stopPropagation()
-        exact.run()
+        run(id)
         return
       }
 
-      if (COMMANDS.some((candidate) => isPrefixOf(chord, bindingFor(candidate.id)))) {
+      if (index.prefixes.has(key)) {
+        // Keep the browser's own Mod+K (address-bar search) out of the way.
         event.preventDefault()
-        event.stopPropagation()
-        pending.current = chord
+        pending.current = key
         pendingTimer.current = setTimeout(clearPending, CHORD_TIMEOUT_MS)
       }
     }

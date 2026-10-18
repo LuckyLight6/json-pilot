@@ -1,14 +1,12 @@
-import { Check, Keyboard, Settings2 } from 'lucide-react'
+import { ArrowUpRight, Check, Keyboard, Settings2 } from 'lucide-react'
 
 import { COMMANDS_BY_ID } from '@/commands/registry'
+import { HoverMenu } from '@/components/hover-menu'
+import { ToolbarButton } from '@/components/toolbar-button'
 import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from '@/components/ui'
 import { LOCALE_PREFERENCES, useI18n } from '@/i18n'
 import { formatBinding, isMacPlatform } from '@/lib/shortcuts'
@@ -35,20 +33,10 @@ export function SettingsMenu() {
   const shortcutsBinding = useKeybindingsStore((state) => state.bindingFor('app.showShortcuts'))
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground hover:text-foreground size-7"
-          title={t('settings.title')}
-          aria-label={t('settings.title')}
-        >
-          <Settings2 className="size-4" aria-hidden />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-52">
-        <DropdownMenuLabel>{t('theme.toggle')}</DropdownMenuLabel>
+    // Opens on hover like the other toolbar menus; a toolbar button like the
+    // rest, so it follows the toolbar style too.
+    <HoverMenu trigger={<ToolbarButton icon={Settings2} label={t('settings.title')} />} align="end" className="min-w-52">
+        <DropdownMenuLabel>{t('settings.theme')}</DropdownMenuLabel>
         {THEMES.map((option) => (
           <DropdownMenuItem key={option} onClick={() => setTheme(option)}>
             <CheckMark active={theme === option} />
@@ -58,7 +46,7 @@ export function SettingsMenu() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuLabel>{t('language.toggle')}</DropdownMenuLabel>
+        <DropdownMenuLabel>{t('settings.language')}</DropdownMenuLabel>
         {LOCALE_PREFERENCES.map((option) => (
           <DropdownMenuItem key={option} onClick={() => setPreference(option)}>
             <CheckMark active={preference === option} />
@@ -78,16 +66,20 @@ export function SettingsMenu() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem onClick={() => COMMANDS_BY_ID.get('app.showShortcuts')?.run()}>
+        <DropdownMenuItem
+          onClick={() => COMMANDS_BY_ID.get('app.showShortcuts')?.run()}
+          title={shortcutsBinding ? `${t('shortcuts.title')} (${formatBinding(shortcutsBinding, IS_MAC)})` : undefined}
+        >
           <Keyboard aria-hidden />
           {t('shortcuts.title')}
-          {shortcutsBinding && (
-            <kbd aria-hidden className="kbd-hint ml-auto">
-              {formatBinding(shortcutsBinding, IS_MAC)}
-            </kbd>
-          )}
         </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        {/* A new tab: documents live only in this one, and leaving would drop them. */}
+        <DropdownMenuItem asChild>
+          <a href="../" target="_blank" rel="noreferrer">
+            <ArrowUpRight aria-hidden />
+            {t('settings.website')}
+          </a>
+        </DropdownMenuItem>
+    </HoverMenu>
   )
 }

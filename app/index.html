@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" data-page="app">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/src/assets/icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Browser JSON editor and explorer: format, query, compare, and unfold nested JSON strings." />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131313" />
+    <title>JSON Pilot</title>
+    <script>
+      // Resolve the saved theme and language before first paint. React only
+      // applies them once the editor bundle has loaded, so without this a
+      // dark-mode choice on a light OS would flash white until then.
+      ;(function () {
+        try {
+          var root = document.documentElement
+          var theme = localStorage.getItem('json-pilot.theme')
+          var dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+          root.classList.toggle('dark', dark)
+          root.style.colorScheme = dark ? 'dark' : 'light'
+          var locale = localStorage.getItem('json-pilot.locale')
+          var languages = navigator.languages || [navigator.language]
+          var zh = locale === 'zh-CN' || (locale !== 'en' && languages.some(function (tag) { return /^zh/i.test(tag) }))
+          root.lang = zh ? 'zh-CN' : 'en'
+        } catch (error) {}
+      })()
+    </script>
+    <style>
+      /* Shown until React replaces #root. Delayed, so a warm load never sees it. */
+      .boot-splash { position: fixed; inset: 0; display: grid; place-items: center; }
+      .boot-splash img { width: 40px; height: 40px; opacity: 0; animation: boot-in 300ms ease 300ms forwards, boot-pulse 1.6s ease-in-out 600ms infinite; }
+      @keyframes boot-in { to { opacity: 1; } }
+      @keyframes boot-pulse { 50% { opacity: 0.45; } }
+      @media (prefers-reduced-motion: reduce) { .boot-splash img { animation: boot-in 1ms 300ms forwards; } }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="boot-splash" aria-hidden="true"><img src="/src/assets/icon.svg" alt="" /></div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

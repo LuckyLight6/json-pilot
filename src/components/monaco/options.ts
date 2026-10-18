@@ -9,15 +9,32 @@ const SCROLLBAR = {
 } as const satisfies editor.IEditorScrollbarOptions
 
 /**
+ * Tailwind's `font-mono` stack, so the editor, the query bar and the keycap
+ * hints all set code in the same face.
+ */
+const FONT_FAMILY =
+  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+
+/** Shared by every editor surface: type, and a quiet right-hand gutter. */
+const TYPOGRAPHY = {
+  fontFamily: FONT_FAMILY,
+  fontSize: 13,
+  lineHeight: 20,
+  overviewRulerBorder: false,
+  hideCursorInOverviewRuler: true,
+} as const satisfies editor.IEditorOptions
+
+/**
  * Single source of truth for the main editor. Suggestions and code lens stay off:
  * this is a document scratchpad, not an IDE, and the noise gets in the way.
  */
 export const CODE_EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions = {
+  ...TYPOGRAPHY,
   automaticLayout: true,
   minimap: { enabled: false },
   scrollBeyondLastLine: false,
-  fontSize: 13,
-  lineHeight: 20,
+  // Keeps the enclosing keys pinned while scrolling deep into a document.
+  stickyScroll: { enabled: true, maxLineCount: 4 },
   // Nested String Fold markers are rendered here, left of the line numbers.
   glyphMargin: true,
   lineNumbersMinChars: 3,
@@ -43,11 +60,10 @@ export const CODE_EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions = 
 }
 
 export const DIFF_EDITOR_OPTIONS: editor.IDiffEditorConstructionOptions = {
+  ...TYPOGRAPHY,
   automaticLayout: true,
   minimap: { enabled: false },
   scrollBeyondLastLine: false,
-  fontSize: 13,
-  lineHeight: 20,
   originalEditable: true,
   renderSideBySide: true,
   // Monaco flips to a single inline pane when the widget is narrow, and while it
@@ -70,4 +86,7 @@ export const RESULT_EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions 
   wordWrap: 'on',
   lineNumbers: 'off',
   glyphMargin: false,
+  stickyScroll: { enabled: false },
+  // Nothing is being edited, so no line is "current".
+  renderLineHighlight: 'none',
 }

@@ -109,8 +109,8 @@ function TabButton({ id }: { id: string }) {
           className={cn(
             'group animate-in fade-in slide-in-from-left-2 relative flex shrink-0 cursor-pointer items-center gap-1.5 border-r px-2.5 text-xs transition-colors duration-200 select-none',
             isActive
-              ? 'bg-background text-foreground shadow-[inset_0_1.5px_0_0_var(--primary)]'
-              : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
+              ? 'bg-background text-foreground focus-visible:bg-accent/40 shadow-[inset_0_1.5px_0_0_var(--primary)]'
+              : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground focus-visible:bg-accent/40 focus-visible:text-foreground',
           )}
         >
           <Icon className="size-3.5 shrink-0" aria-hidden />
@@ -124,7 +124,7 @@ function TabButton({ id }: { id: string }) {
               closeTab(id)
             }}
             className={cn(
-              'hover:bg-muted hover:text-foreground -mr-1 rounded-[4px] p-0.5 transition-opacity',
+              'hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:text-foreground -mr-1 rounded-[4px] p-0.5 transition-opacity',
               isActive ? 'opacity-60 hover:opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
             )}
           >

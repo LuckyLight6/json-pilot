@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
+import { MONACO_THEMES } from '@/components/monaco/themes'
 import { readPreference, writePreference } from '@/lib/local-preference'
 
 export type Theme = 'light' | 'dark' | 'system'
@@ -61,7 +62,7 @@ export function useTheme(): ThemeValue {
   return context
 }
 
-/** Monaco's built-in theme ids — `vs` is the light one. */
-export function useMonacoTheme(): 'vs' | 'vs-dark' {
-  return useTheme().resolvedTheme === 'dark' ? 'vs-dark' : 'vs'
+/** The Monaco theme matching what is on screen — see `components/monaco/themes.ts`. */
+export function useMonacoTheme(): string {
+  return MONACO_THEMES[useTheme().resolvedTheme]
 }

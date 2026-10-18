@@ -13,31 +13,62 @@ import {
   GitCompare,
   Minimize2,
   Quote,
+  type LucideIcon,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import iconUrl from '@/assets/icon.svg'
+import { requestClear, type CommandId } from '@/commands/registry'
+import { HoverMenu } from '@/components/hover-menu'
 import { JsonStatusBadge } from '@/components/json-status-badge'
 import { SettingsMenu } from '@/components/settings-menu'
 import { ToolbarButton } from '@/components/toolbar-button'
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui'
-import { useI18n } from '@/i18n'
-import { useActiveTab, useEditorStore } from '@/store/editor-store'
+import { DropdownMenuItem } from '@/components/ui'
+import { useI18n, type MessageKey } from '@/i18n'
+import { formatBinding, isMacPlatform } from '@/lib/shortcuts'
+import { useActiveTabKind, useEditorStore } from '@/store/editor-store'
+import { useKeybindingsStore } from '@/store/keybindings-store'
+
+const IS_MAC = isMacPlatform()
 
 function ToolbarDivider() {
-  return <div className="bg-border mx-1.5 hidden h-4 w-px sm:block" aria-hidden />
+  return <div className="bg-border mx-1.5 h-4 w-px shrink-0" aria-hidden />
+}
+
+interface MenuEntry {
+  icon: LucideIcon
+  labelKey: MessageKey
+  command: CommandId
+  run: () => void
+}
+
+/**
+ * Like the toolbar buttons, menu items spell their shortcut in the hover title
+ * rather than drawing keycaps, so the whole toolbar reads one way.
+ */
+function MenuEntryItem({ entry }: { entry: MenuEntry }) {
+  const { t } = useI18n()
+  const binding = useKeybindingsStore((state) => state.bindingFor(entry.command))
+  const Icon = entry.icon
+  const label = t(entry.labelKey)
+  return (
+    <DropdownMenuItem onSelect={entry.run} title={binding ? `${label} (${formatBinding(binding, IS_MAC)})` : label}>
+      <Icon aria-hidden />
+      {label}
+    </DropdownMenuItem>
+  )
+}
+
+/** A toolbar button that opens a short menu of related commands — on hover too. */
+function ToolbarMenu({ icon, labelKey, entries }: { icon: LucideIcon; labelKey: MessageKey; entries: MenuEntry[] }) {
+  const { t } = useI18n()
+  return (
+    <HoverMenu trigger={<ToolbarButton icon={icon} label={t(labelKey)} menu />} className="min-w-44">
+      {entries.map((entry) => (
+        <MenuEntryItem key={entry.command} entry={entry} />
+      ))}
+    </HoverMenu>
+  )
 }
 
 function DocumentToolbar() {
@@ -50,51 +81,43 @@ function DocumentToolbar() {
   const foldAll = useEditorStore((state) => state.foldAll)
   const unfoldAll = useEditorStore((state) => state.unfoldAll)
   const copy = useEditorStore((state) => state.copy)
-  const clear = useEditorStore((state) => state.clear)
-  const [isClearOpen, setClearOpen] = useState(false)
 
   return (
-    <div className="flex flex-wrap items-center gap-px sm:justify-end">
-      {/* The two workhorse actions: always labelled, filled, one click. */}
-      <div className="mr-1 flex items-center gap-px">
-        <ToolbarButton
-          emphasized
-          icon={AlignLeft}
-          label={t('action.format')}
-          onClick={format}
-          command="document.format"
-        />
-        <ToolbarButton
-          emphasized
-          icon={Minimize2}
-          label={t('action.minify')}
-          onClick={minify}
-          command="document.minify"
-        />
-      </div>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <ToolbarButton icon={ArrowDownAZ} label={t('action.sortKeys')} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => sortKeys('asc')}>
-            <ArrowDownAZ aria-hidden />
-            {t('action.sortAscending')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => sortKeys('desc')}>
-            <ArrowUpAZ aria-hidden />
-            {t('action.sortDescending')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+    <>
+      {/* The one primary action. Everything else is quiet until hovered. */}
+      <ToolbarButton
+        emphasized
+        icon={AlignLeft}
+        label={t('action.format')}
+        onClick={format}
+        command="document.format"
+      />
+      <ToolbarButton icon={Minimize2} label={t('action.minify')} onClick={minify} command="document.minify" />
 
-      <ToolbarButton icon={ChevronsDownUp} label={t('action.foldAll')} onClick={foldAll} command="editor.foldAll" />
-      <ToolbarButton icon={ChevronsUpDown} label={t('action.unfoldAll')} onClick={unfoldAll} command="editor.unfoldAll" />
-
-      <ToolbarDivider />
-
-      <ToolbarButton icon={Quote} label={t('action.escape')} onClick={escape} command="document.escape" />
-      <ToolbarButton icon={Braces} label={t('action.unescape')} onClick={unescape} command="document.unescape" />
+      <ToolbarMenu
+        icon={ArrowDownAZ}
+        labelKey="action.sortKeys"
+        entries={[
+          { icon: ArrowDownAZ, labelKey: 'action.sortAscending', command: 'document.sortAscending', run: () => sortKeys('asc') },
+          { icon: ArrowUpAZ, labelKey: 'action.sortDescending', command: 'document.sortDescending', run: () => sortKeys('desc') },
+        ]}
+      />
+      <ToolbarMenu
+        icon={ChevronsDownUp}
+        labelKey="action.foldMenu"
+        entries={[
+          { icon: ChevronsDownUp, labelKey: 'action.foldAll', command: 'editor.foldAll', run: foldAll },
+          { icon: ChevronsUpDown, labelKey: 'action.unfoldAll', command: 'editor.unfoldAll', run: unfoldAll },
+        ]}
+      />
+      <ToolbarMenu
+        icon={Quote}
+        labelKey="action.escapeMenu"
+        entries={[
+          { icon: Quote, labelKey: 'action.escapeLong', command: 'document.escape', run: escape },
+          { icon: Braces, labelKey: 'action.unescapeLong', command: 'document.unescape', run: unescape },
+        ]}
+      />
 
       <ToolbarDivider />
 
@@ -102,34 +125,12 @@ function DocumentToolbar() {
       <ToolbarButton
         icon={Eraser}
         label={t('action.clear')}
-        onClick={() => setClearOpen(true)}
+        onClick={requestClear}
         command="document.clear"
-        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+        // Quiet until hovered: the most destructive action should not be the loudest.
+        className="hover:text-destructive hover:bg-destructive/10"
       />
-
-      <Dialog open={isClearOpen} onOpenChange={setClearOpen}>
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>{t('confirm.clearTitle')}</DialogTitle>
-            <DialogDescription>{t('confirm.clearDescription')}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClearOpen(false)}>
-              {t('confirm.cancel')}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                clear()
-                setClearOpen(false)
-              }}
-            >
-              {t('confirm.clearConfirm')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+    </>
   )
 }
 
@@ -146,47 +147,99 @@ function CompareToolbar() {
         onClick={swapComparePanes}
         command="compare.swapPanes"
       />
-      <ToolbarButton
-        icon={FileOutput}
-        label={t('action.promoteLeft')}
-        onClick={() => promoteComparePane('left')}
-      />
-      <ToolbarButton
-        icon={FileInput}
-        label={t('action.promoteRight')}
-        onClick={() => promoteComparePane('right')}
-      />
+      <ToolbarButton icon={FileOutput} label={t('action.promoteLeft')} onClick={() => promoteComparePane('left')} />
+      <ToolbarButton icon={FileInput} label={t('action.promoteRight')} onClick={() => promoteComparePane('right')} />
     </>
+  )
+}
+
+/** How far a hidden edge of the toolbar row fades out. */
+const EDGE_FADE = 28
+
+/**
+ * One row, always: when the labels the toolbar style asks for do not fit, the
+ * row scrolls sideways (the mouse wheel scrolls it too) instead of wrapping or
+ * hiding them, and whichever edge has more buttons behind it fades out — a cut
+ * clean through a label read as a broken layout.
+ */
+function ToolbarRow({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [edges, setEdges] = useState({ start: false, end: false })
+
+  useEffect(() => {
+    const row = ref.current
+    if (!row) return
+    const update = () => {
+      const start = row.scrollLeft > 1
+      const end = row.scrollLeft + row.clientWidth < row.scrollWidth - 1
+      setEdges((current) => (current.start === start && current.end === end ? current : { start, end }))
+    }
+    update()
+    // The row's width changes with the window; its content with the language,
+    // the toolbar style and the active tab.
+    const resize = new ResizeObserver(update)
+    resize.observe(row)
+    const mutation = new MutationObserver(update)
+    mutation.observe(row, { childList: true, subtree: true, characterData: true })
+    row.addEventListener('scroll', update, { passive: true })
+    return () => {
+      resize.disconnect()
+      mutation.disconnect()
+      row.removeEventListener('scroll', update)
+    }
+  }, [])
+
+  const mask =
+    edges.start || edges.end
+      ? `linear-gradient(to right, ${edges.start ? `transparent, #000 ${EDGE_FADE}px` : '#000'}, ${
+          edges.end ? `#000 calc(100% - ${EDGE_FADE}px), transparent` : '#000'
+        })`
+      : undefined
+
+  return (
+    <div
+      ref={ref}
+      className="no-scrollbar flex min-w-0 items-center gap-px overflow-x-auto"
+      style={{ maskImage: mask }}
+      onWheel={(event) => {
+        // A plain mouse wheel only scrolls vertically; turn it sideways here.
+        if (event.deltaX === 0 && event.deltaY !== 0) event.currentTarget.scrollLeft += event.deltaY
+      }}
+    >
+      {children}
+    </div>
   )
 }
 
 export function AppHeader() {
   const { t } = useI18n()
-  const activeTab = useActiveTab()
+  const isCompare = useActiveTabKind() === 'compare'
   const openCompareTab = useEditorStore((state) => state.openCompareTab)
-  const isCompare = activeTab?.kind === 'compare'
 
   return (
-    <header className="bg-surface-raised flex flex-col gap-1 border-b px-2.5 py-1.5 sm:min-h-10 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:py-1">
+    <header className="bg-surface-raised flex min-h-10 items-center gap-3 border-b px-2.5 py-1">
       <div className="flex shrink-0 items-center gap-2">
-        <img src={iconUrl} alt="" className="h-5 w-5" aria-hidden />
-        <span className="text-[13px] font-semibold tracking-tight">{t('app.name')}</span>
+        <img src={iconUrl} alt="" className="size-5 rounded-[5px]" aria-hidden />
+        <span className="hidden text-[13px] font-semibold tracking-tight sm:inline">{t('app.name')}</span>
         <JsonStatusBadge />
       </div>
 
-      <div className="flex flex-wrap items-center gap-px sm:justify-end">
-        {isCompare ? <CompareToolbar /> : <DocumentToolbar />}
+      <div className="ml-auto flex min-w-0 items-center gap-px">
+        <ToolbarRow>
+          {isCompare ? <CompareToolbar /> : <DocumentToolbar />}
 
-        <ToolbarDivider />
+          <ToolbarDivider />
 
-        {!isCompare && (
-          <ToolbarButton
-            icon={GitCompare}
-            label={t('action.compare')}
-            onClick={openCompareTab}
-            command="tabs.newCompare"
-          />
-        )}
+          {!isCompare && (
+            <ToolbarButton
+              icon={GitCompare}
+              label={t('action.compare')}
+              onClick={openCompareTab}
+              command="tabs.newCompare"
+            />
+          )}
+        </ToolbarRow>
+        {/* Outside the scrolling row: settings is always one click away. */}
         <SettingsMenu />
       </div>
     </header>

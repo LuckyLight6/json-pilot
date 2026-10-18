@@ -16,31 +16,28 @@ import {
 import { useState } from 'react'
 
 import type { CommandId } from '@/commands/registry'
+import { KeyCombo } from '@/components/key-combo'
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
-  ContextMenuShortcut,
   ContextMenuTrigger,
 } from '@/components/ui'
 import { useI18n } from '@/i18n'
 import type { FoldTargetKind } from '@/lib/json/fold-targets'
-import { formatBinding, formatChord, isMacPlatform } from '@/lib/shortcuts'
 import { useEditorStore } from '@/store/editor-store'
 import { useKeybindingsStore } from '@/store/keybindings-store'
 
-const IS_MAC = isMacPlatform()
-
 /** A fixed hint for keys Monaco owns and we never rebind. */
 function Chord({ binding }: { binding: string }) {
-  return <ContextMenuShortcut>{formatChord(binding, IS_MAC)}</ContextMenuShortcut>
+  return <KeyCombo binding={binding} className="ml-auto pl-4" />
 }
 
 /** A hint read from the live keymap, so a rebind shows up here too. */
 function CommandChord({ id }: { id: CommandId }) {
   const binding = useKeybindingsStore((state) => state.bindingFor(id))
-  return binding ? <ContextMenuShortcut>{formatBinding(binding, IS_MAC)}</ContextMenuShortcut> : null
+  return <KeyCombo binding={binding} className="ml-auto pl-4" />
 }
 
 /** Shared by both menus; acts on whichever editor holds the caret. */

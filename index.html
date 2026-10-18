@@ -2,14 +2,51 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/src/assets/icon.svg?v=2" />
+    <link rel="icon" type="image/svg+xml" href="/src/assets/icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Browser JSON editor and explorer: format, query, compare, and unfold nested JSON strings." />
+    <title>JSON Pilot — the JSON workbench that runs in your browser</title>
+    <meta
+      name="description"
+      content="Format, query, compare and unfold nested JSON strings. Free, open source and keyboard-first — and nothing ever leaves your browser."
+    />
     <meta name="color-scheme" content="light dark" />
-    <title>JSON Pilot</title>
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0a" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="JSON Pilot" />
+    <meta property="og:title" content="JSON Pilot — the JSON workbench that runs in your browser" />
+    <meta
+      property="og:description"
+      content="Format, query, compare and unfold nested JSON strings. Free, open source and keyboard-first."
+    />
+    <meta property="og:url" content="https://luckylight6.github.io/json-pilot/" />
+    <!-- Crawlers need an absolute URL; scripts/render-assets.mjs renders the card. -->
+    <meta property="og:image" content="https://luckylight6.github.io/json-pilot/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Same pre-paint resolution as the editor (app/index.html): theme and
+      // language both follow the system unless the visitor chose otherwise.
+      ;(function () {
+        try {
+          var root = document.documentElement
+          var theme = localStorage.getItem('json-pilot.theme')
+          var dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+          root.classList.toggle('dark', dark)
+          root.style.colorScheme = dark ? 'dark' : 'light'
+          var locale = localStorage.getItem('json-pilot.locale')
+          var languages = navigator.languages || [navigator.language]
+          var zh = locale === 'zh-CN' || (locale !== 'en' && languages.some(function (tag) { return /^zh/i.test(tag) }))
+          root.lang = zh ? 'zh-CN' : 'en'
+        } catch (error) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/src/site/main.tsx"></script>
   </body>
 </html>

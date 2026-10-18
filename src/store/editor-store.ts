@@ -1,4 +1,5 @@
-import { MarkerSeverity, Range, editor as monacoEditor, type editor } from 'monaco-editor'
+import type * as Monaco from 'monaco-editor'
+import type { IRange, editor } from 'monaco-editor'
 import { toast } from 'sonner'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/shallow'
@@ -15,7 +16,7 @@ import { formatQueryValue, runQuery as runJsonQuery, type QueryKind } from '@/li
 import { SAMPLE_DOCUMENT } from '@/lib/json/sample'
 import * as transform from '@/lib/json/transform'
 import type { JsonPath } from '@/lib/json/types'
-import { nextActiveAfterClose, normalizeTabName, type TabIdentity } from '@/lib/tabs'
+import { nextActiveAfterClose, normalizeTabName, tabIdFromUri, type TabIdentity } from '@/lib/tabs'
 
 /**
  * Coalesce marker refreshes across typing bursts. Long enough that the
@@ -26,6 +27,11 @@ const DECORATION_DELAY_MS = 250
 
 // Imperative Monaco handles. They are not render state, so they live outside the
 // store — keeping them here would make every subscriber re-render on attach.
+//
+// The Monaco API itself arrives with the first editor (`attachEditor`) instead
+// of through an import: Monaco is a lazily loaded chunk, and a static import
+// here would put all 3 MB of it back on the critical path of the first paint.
+let monaco: typeof Monaco | null = null
 let codeEditor: editor.IStandaloneCodeEditor | null = null
 let diffEditor: editor.IStandaloneDiffEditor | null = null
 let foldDecorations: editor.IEditorDecorationsCollection | null = null
@@ -53,6 +59,15 @@ export interface CompareTab extends TabIdentity {
 
 export type Tab = DocumentTab | CompareTab
 
+/** What the result dialog shows: the rendered value and the query behind it. */
+export interface QueryOutcome {
+  kind: QueryKind
+  query: string
+  text: string
+  /** JSONPath only: how many nodes matched. */
+  matches?: number
+}
+
 interface EditorState {
   tabs: Tab[]
   activeTabId: string
@@ -60,18 +75,20 @@ interface EditorState {
   errors: editor.IMarker[]
   cursor: CursorPosition
   foldTargets: FoldTarget[]
-  queryResult: string | null
+  queryResult: QueryOutcome | null
   isQueryOpen: boolean
   nextDocumentSeq: number
   nextCompareSeq: number
 }
 
 interface EditorActions {
-  attachEditor: (instance: editor.IStandaloneCodeEditor) => void
+  attachEditor: (instance: editor.IStandaloneCodeEditor, api: typeof Monaco) => void
   /** Ignores instances that are no longer the attached one — see the note below. */
   detachEditor: (instance: editor.IStandaloneCodeEditor) => void
-  attachDiffEditor: (instance: editor.IStandaloneDiffEditor, ...rest: unknown[]) => void
+  attachDiffEditor: (instance: editor.IStandaloneDiffEditor, api: typeof Monaco) => void
   detachDiffEditor: (instance: editor.IStandaloneDiffEditor) => void
+  /** Disposes text models whose tab is gone and which no editor still shows. */
+  reapOrphanModels: (liveTabIds: string[]) => void
   /** Redraw markers when something outside the document changes their labels. */
   refreshFoldMarkers: () => void
   /** Re-read state that belongs to whichever model the editor just switched to. */
@@ -98,6 +115,8 @@ interface EditorActions {
   copy: () => void
   clear: () => void
   loadSample: () => void
+  /** Puts the caret back in the document editor, e.g. once a dialog has closed. */
+  focusEditor: () => void
 
   goToFirstError: () => void
   toggleFoldOnLine: (lineNumber: number) => void
@@ -168,7 +187,7 @@ export const useEditorStore = create<EditorStore>((set, get) => {
   const refreshFoldMarkers = (force = false) => {
     const model = codeEditor?.getModel()
     const document = activeDocument()
-    if (!model || !foldDecorations || !document) return
+    if (!monaco || !model || !foldDecorations || !document) return
 
     const targets = collectFoldTargets(document.value)
     set({ foldTargets: targets })
@@ -201,7 +220,7 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     }
     renderedTargetsKey = key
 
-    foldDecorations.set(buildFoldDecorations(model, targets))
+    foldDecorations.set(buildFoldDecorations(monaco, model, targets))
   }
 
   const scheduleFoldMarkers = () => {
@@ -331,17 +350,26 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       return
     }
 
+    // Its own undo step, and focus back in the editor: the marker is clicked
+    // in the gutter, which leaves focus where it was, so an immediate ⌘Z would
+    // otherwise go nowhere — or undo the previous edit along with this one.
+    codeEditor.pushUndoStop()
     codeEditor.executeEdits(
       'nested-string-fold',
       result.edits.map((edit) => {
         const start = model.getPositionAt(edit.offset)
         const end = model.getPositionAt(edit.offset + edit.length)
-        return {
-          range: new Range(start.lineNumber, start.column, end.lineNumber, end.column),
-          text: edit.content,
+        const range: IRange = {
+          startLineNumber: start.lineNumber,
+          startColumn: start.column,
+          endLineNumber: end.lineNumber,
+          endColumn: end.column,
         }
+        return { range, text: edit.content }
       }),
     )
+    codeEditor.pushUndoStop()
+    codeEditor.focus()
   }
 
   /** Whichever editor the caret is in: a diff pane while comparing, else the document. */
@@ -357,14 +385,14 @@ export const useEditorStore = create<EditorStore>((set, get) => {
   }
 
   /** The selection, or the whole line when empty — matching VS Code's clipboard. */
-  const selectionRange = (): Range | null => {
+  const selectionRange = (): IRange | null => {
     const active = focusedEditor()
     const model = active?.getModel()
     const selection = active?.getSelection()
     if (!model || !selection) return null
-    if (!selection.isEmpty()) return Range.lift(selection)
+    if (!selection.isEmpty()) return selection
     const line = selection.startLineNumber
-    return new Range(line, 1, Math.min(line + 1, model.getLineCount()), 1)
+    return { startLineNumber: line, startColumn: 1, endLineNumber: Math.min(line + 1, model.getLineCount()), endColumn: 1 }
   }
 
   const selectedText = (): string | null => {
@@ -386,7 +414,8 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     nextDocumentSeq: 2,
     nextCompareSeq: 1,
 
-    attachEditor: (instance) => {
+    attachEditor: (instance, api) => {
+      monaco = api
       codeEditor = instance
       foldDecorations = instance.createDecorationsCollection()
       refreshFoldMarkers()
@@ -403,7 +432,8 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       renderedTargetsKey = ''
       renderedLineCount = -1
     },
-    attachDiffEditor: (instance) => {
+    attachDiffEditor: (instance, api) => {
+      monaco = api
       diffEditor = instance
     },
     detachDiffEditor: (instance) => {
@@ -413,15 +443,27 @@ export const useEditorStore = create<EditorStore>((set, get) => {
     },
     refreshFoldMarkers: () => refreshFoldMarkers(true),
 
+    // Runs after commit, once React has already pointed the editor at a
+    // surviving tab. Anything still attached is skipped: disposing an attached
+    // model leaves the editor holding a dead one.
+    reapOrphanModels: (liveTabIds) => {
+      if (!monaco) return
+      const live = new Set(liveTabIds)
+      for (const model of monaco.editor.getModels()) {
+        const owner = tabIdFromUri(model.uri.toString())
+        if (owner && !live.has(owner) && !model.isAttachedToEditor()) model.dispose()
+      }
+    },
+
     // Markers and decorations belong to a model, so both have to be re-derived
     // when the shared editor is pointed at a different tab. `onValidate` stays
     // silent on a switch — nothing about the markers changed, only which model
     // is on screen — so read them back explicitly.
     syncActiveModel: () => {
       const model = codeEditor?.getModel()
-      if (!model) return
+      if (!monaco || !model) return
       foldDecorations?.clear()
-      get().setErrors(monacoEditor.getModelMarkers({ resource: model.uri }))
+      get().setErrors(monaco.editor.getModelMarkers({ resource: model.uri }))
       const position = codeEditor?.getPosition()
       if (position) set({ cursor: { line: position.lineNumber, column: position.column } })
       refreshFoldMarkers()
@@ -499,10 +541,12 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       if (!document || value === document.value) return
       applyDocument(value)
     },
-    setErrors: (markers) =>
-      set({
-        errors: markers.filter((marker) => marker.severity === MarkerSeverity.Error).sort(byDocumentOrder),
-      }),
+    setErrors: (markers) => {
+      // Markers only exist once an editor has loaded Monaco.
+      if (!monaco) return
+      const error = monaco.MarkerSeverity.Error
+      set({ errors: markers.filter((marker) => marker.severity === error).sort(byDocumentOrder) })
+    },
     setCursor: (cursor) => set({ cursor }),
 
     format: () => applyTransform(transform.format),
@@ -528,6 +572,7 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       applyDocument('')
       toast.success(t('notice.cleared'))
     },
+    focusEditor: () => codeEditor?.focus(),
     loadSample: () => {
       applyDocument(SAMPLE_DOCUMENT)
       codeEditor?.focus()
@@ -624,12 +669,17 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       if (!result.ok) {
         if (result.reason === 'query_failed') {
           toast.error(t('notice.queryFailed', { message: result.message }))
+        } else if (result.reason === 'async_result') {
+          toast.error(t('notice.queryAsync'))
         } else {
           reportFailure(result.reason)
         }
         return
       }
-      set({ queryResult: formatQueryValue(result.value), isQueryOpen: true })
+      set({
+        queryResult: { kind, query: query.trim(), text: formatQueryValue(result.value), matches: result.matches },
+        isQueryOpen: true,
+      })
     },
     closeQuery: () => set({ isQueryOpen: false }),
 
@@ -667,6 +717,15 @@ export function useTab(id: string): Tab | undefined {
 
 export function useActiveTab(): Tab | undefined {
   return useEditorStore((state) => state.tabs.find((tab) => tab.id === state.activeTabId))
+}
+
+/**
+ * Only the kind of the active tab. Chrome that merely switches between document
+ * and comparison layouts should use this: `useActiveTab` hands back a new object
+ * on every keystroke, and the whole toolbar would re-render with it.
+ */
+export function useActiveTabKind(): Tab['kind'] | undefined {
+  return useEditorStore((state) => state.tabs.find((tab) => tab.id === state.activeTabId)?.kind)
 }
 
 /** The active tab when it holds a JSON Document, otherwise null. */

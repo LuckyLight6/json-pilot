@@ -17,8 +17,8 @@ describe('vendorChunkForModule', () => {
     '/workspace/node_modules/@radix-ui/react-dialog/dist/index.mjs',
     '/workspace/node_modules/react-remove-scroll/dist/es2015/index.js',
     '/workspace/node_modules/zustand/esm/react.mjs',
-  ])('does not mistake React consumers for the core runtime: %s', (id) => {
-    expect(vendorChunkForModule(id)).toBe('vendor')
+  ])('leaves React consumers to Rollup instead of the core runtime chunk: %s', (id) => {
+    expect(vendorChunkForModule(id)).toBeUndefined()
   })
 
   it.each([
@@ -26,6 +26,10 @@ describe('vendorChunkForModule', () => {
     '/workspace/node_modules/@monaco-editor/react/dist/index.mjs',
   ])('keeps Monaco in its isolated chunk: %s', (id) => {
     expect(vendorChunkForModule(id)).toBe('monaco')
+  })
+
+  it('keeps the dynamic-import helper out of the lazily loaded Monaco chunk', () => {
+    expect(vendorChunkForModule('\0vite/preload-helper.js')).toBe('runtime')
   })
 
   it('leaves application modules to Rollup', () => {

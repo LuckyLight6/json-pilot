@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import {
   chordFromEvent,
-  chordsEqual,
+  bindingKeys,
+  buildBindingIndex,
   formatBinding,
   formatChord,
-  isPrefixOf,
   keyFromCode,
-  matchesBinding,
+  keyFromKeyValue,
   parseBinding,
   parseChord,
   serializeBinding,
@@ -17,6 +17,7 @@ import {
 function event(code: string, modifiers: Partial<Record<'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'isComposing', boolean>> = {}) {
   return {
     code,
+    key: '',
     metaKey: false,
     ctrlKey: false,
     altKey: false,
@@ -82,7 +83,54 @@ describe('serializeChord', () => {
   })
 })
 
+describe('bindingKeys', () => {
+  it('splits a binding into keycaps in platform order', () => {
+    expect(bindingKeys('Mod+Alt+Shift+F', true)).toEqual([['⌥', '⇧', '⌘', 'F']])
+    expect(bindingKeys('Mod+Alt+Shift+F', false)).toEqual([['Ctrl', 'Alt', 'Shift', 'F']])
+  })
+
+  it('keeps the chords of a sequence apart', () => {
+    expect(bindingKeys('Mod+K Mod+0', true)).toEqual([['⌘', 'K'], ['⌘', '0']])
+    expect(bindingKeys('Mod+K D', false)).toEqual([['Ctrl', 'K'], ['D']])
+  })
+
+  it('spells awkward keys readably', () => {
+    expect(bindingKeys('Mod+Alt+PageDown', false)).toEqual([['Ctrl', 'Alt', 'PgDn']])
+    expect(bindingKeys('Escape', false)).toEqual([['Esc']])
+    expect(bindingKeys('Backspace', true)).toEqual([['⌫']])
+  })
+
+  it('returns nothing for an unbound command', () => {
+    expect(bindingKeys('', true)).toEqual([])
+  })
+})
+
+describe('keyFromKeyValue', () => {
+  it('accepts plain characters and named keys', () => {
+    expect(keyFromKeyValue('/')).toBe('/')
+    expect(keyFromKeyValue('f')).toBe('F')
+    expect(keyFromKeyValue('Enter')).toBe('Enter')
+    expect(keyFromKeyValue(' ')).toBe('Space')
+  })
+
+  it('rejects characters the keymap cannot name', () => {
+    expect(keyFromKeyValue('ƒ')).toBeNull()
+    expect(keyFromKeyValue('?')).toBeNull()
+    expect(keyFromKeyValue('Unidentified')).toBeNull()
+  })
+})
+
 describe('chordFromEvent', () => {
+  it('falls back to the key value when the event has no physical code', () => {
+    const synthetic = { ...event('', { metaKey: true }), key: '/' }
+    expect(chordFromEvent(synthetic, true)).toMatchObject({ mod: true, key: '/' })
+  })
+
+  it('prefers the physical code whenever there is one', () => {
+    const alt = { ...event('KeyF', { altKey: true }), key: 'ƒ' }
+    expect(chordFromEvent(alt, true)).toMatchObject({ alt: true, key: 'F' })
+  })
+
   it('maps Cmd to Mod on macOS and Ctrl to Mod elsewhere', () => {
     expect(chordFromEvent(event('KeyF', { metaKey: true }), true)).toMatchObject({ mod: true, key: 'F' })
     expect(chordFromEvent(event('KeyF', { ctrlKey: true }), false)).toMatchObject({ mod: true, key: 'F' })
@@ -110,8 +158,7 @@ describe('chordFromEvent', () => {
 
   it('produces a chord that matches the parsed binding', () => {
     const fromEvent = chordFromEvent(event('KeyF', { metaKey: true, shiftKey: true }), true)!
-    expect(chordsEqual(fromEvent, parseChord('Mod+Shift+F')!)).toBe(true)
-    expect(chordsEqual(fromEvent, parseChord('Mod+F')!)).toBe(false)
+    expect(serializeChord(fromEvent)).toBe('Mod+Shift+F')
   })
 })
 
@@ -160,17 +207,31 @@ describe('key sequences', () => {
     expect(formatBinding('Mod+K M', false)).toBe('Ctrl+K M')
   })
 
-  it('recognises a prefix only for multi-chord bindings', () => {
-    const modK = parseChord('Mod+K')!
-    expect(isPrefixOf(modK, 'Mod+K M')).toBe(true)
-    expect(isPrefixOf(modK, 'Mod+K')).toBe(false)
-    expect(isPrefixOf(parseChord('Mod+J')!, 'Mod+K M')).toBe(false)
+})
+
+describe('buildBindingIndex', () => {
+  const index = buildBindingIndex([
+    ['format', 'Alt+Shift+F'],
+    ['palette', 'Mod+K M'],
+    ['also-format', 'alt+shift+f'],
+    ['broken', 'Mod+Nope'],
+  ] as const)
+
+  it('indexes single chords by their canonical spelling', () => {
+    expect(index.chords.get('Alt+Shift+F')).toBe('format')
   })
 
-  it('matches a full sequence exactly', () => {
-    const seq = [parseChord('Mod+K')!, parseChord('M')!]
-    expect(matchesBinding(seq, 'Mod+K M')).toBe(true)
-    expect(matchesBinding(seq, 'Mod+K N')).toBe(false)
-    expect(matchesBinding([parseChord('Mod+K')!], 'Mod+K M')).toBe(false)
+  it('lets the first of two identical bindings win', () => {
+    expect([...index.chords.values()]).toEqual(['format'])
+  })
+
+  it('indexes sequences and remembers their opening chord', () => {
+    expect(index.sequences.get('Mod+K M')).toBe('palette')
+    expect(index.prefixes.has('Mod+K')).toBe(true)
+    expect(index.chords.has('Mod+K')).toBe(false)
+  })
+
+  it('skips bindings that do not parse', () => {
+    expect(index.chords.size + index.sequences.size).toBe(2)
   })
 })

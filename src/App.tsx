@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 
 import { setThemeCycler } from '@/commands/registry'
 import { AppHeader } from '@/components/app-header'
+import { ClearDocumentDialog } from '@/components/clear-document-dialog'
 import { EditorWorkspace } from '@/components/editor-workspace'
 import { QueryBar } from '@/components/query-bar'
 import { QueryResultDialog } from '@/components/query-result-dialog'
@@ -33,6 +34,7 @@ function Workspace() {
       </div>
       <QueryResultDialog />
       <ShortcutsDialog />
+      <ClearDocumentDialog />
       <Toaster position="bottom-center" />
     </>
   )

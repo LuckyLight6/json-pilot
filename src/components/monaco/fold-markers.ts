@@ -1,4 +1,5 @@
-import { Range, editor as monacoEditor, type editor } from 'monaco-editor'
+import type * as Monaco from 'monaco-editor'
+import type { editor } from 'monaco-editor'
 
 import { t } from '@/i18n'
 import type { FoldTarget } from '@/lib/json/fold-targets'
@@ -13,6 +14,7 @@ import type { FoldTarget } from '@/lib/json/fold-targets'
  * target is reachable; format first to expose the rest.
  */
 export function buildFoldDecorations(
+  monaco: typeof Monaco,
   model: editor.ITextModel,
   targets: FoldTarget[],
 ): editor.IModelDeltaDecoration[] {
@@ -25,7 +27,7 @@ export function buildFoldDecorations(
     claimedLines.add(lineNumber)
 
     decorations.push({
-      range: new Range(lineNumber, 1, lineNumber, 1),
+      range: { startLineNumber: lineNumber, startColumn: 1, endLineNumber: lineNumber, endColumn: 1 },
       options: {
         glyphMarginClassName: `json-fold-marker json-fold-${target.kind}`,
         glyphMarginHoverMessage: {
@@ -35,7 +37,7 @@ export function buildFoldDecorations(
         // must push the marker down with its content in the same edit frame.
         // The default stickiness leaves it stranded on the old line until the
         // next refresh, which reads as the marker jumping.
-        stickiness: monacoEditor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
       },
     })
   }

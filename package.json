@@ -9,7 +9,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc -b",
+    "capture:screenshots": "node scripts/capture-screenshots.mjs",
+    "render:promo": "node scripts/render-promo.mjs",
+    "render:assets": "node scripts/render-assets.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

@@ -1,15 +1,14 @@
-import type { DiffOnMount } from '@monaco-editor/react'
-import { editor as monacoEditor, type editor } from 'monaco-editor'
+import type { DiffOnMount, OnMount } from '@monaco-editor/react'
+import { Braces } from 'lucide-react'
 import { useCallback, useEffect, useMemo } from 'react'
 
 import type { CommandId } from '@/commands/registry'
 import { CompareContextMenu, DocumentContextMenu } from '@/components/editor-context-menu'
-import { CodeEditor } from '@/components/monaco/code-editor'
-import { DiffEditor } from '@/components/monaco/diff-editor'
+import { KeyCombo } from '@/components/key-combo'
+import { CodeEditor, DiffEditor } from '@/components/monaco/lazy'
 import { Button } from '@/components/ui'
 import { useI18n } from '@/i18n'
-import { formatBinding, isMacPlatform } from '@/lib/shortcuts'
-import { compareUri, documentUri, tabIdFromUri } from '@/lib/tabs'
+import { compareUri, documentUri } from '@/lib/tabs'
 import { cn } from '@/lib/utils'
 import {
   useActiveTab,
@@ -22,15 +21,13 @@ import { useKeybindingsStore } from '@/store/keybindings-store'
 import { useWordWrap } from '@/store/preferences-store'
 import { useMonacoTheme } from '@/theme'
 
-const IS_MAC = isMacPlatform()
-
 function ShortcutHint({ command, label }: { command: CommandId; label: string }) {
   const binding = useKeybindingsStore((state) => state.bindingFor(command))
   if (!binding) return null
   return (
     <span className="flex items-center justify-between gap-6">
       <span className="text-muted-foreground text-xs">{label}</span>
-      <kbd className="kbd-hint">{formatBinding(binding, IS_MAC)}</kbd>
+      <KeyCombo binding={binding} />
     </span>
   )
 }
@@ -40,11 +37,16 @@ function EmptyState() {
   const loadSample = useEditorStore((state) => state.loadSample)
 
   return (
-    <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
-      <div className="animate-in fade-in slide-in-from-bottom-2 pointer-events-auto w-full max-w-xs space-y-4 text-center duration-300">
+    // `m-auto` in a scrolling column centres the card when it fits and keeps its
+    // top in view when the window is too short, instead of spilling upward.
+    <div className="pointer-events-none absolute inset-0 flex flex-col overflow-hidden p-6">
+      <div className="animate-in fade-in slide-in-from-bottom-2 pointer-events-auto m-auto w-full max-w-sm space-y-4 text-center duration-300">
+        <div className="bg-primary/10 text-primary ring-primary/15 mx-auto flex size-10 items-center justify-center rounded-xl ring-1">
+          <Braces className="size-5" aria-hidden />
+        </div>
         <div className="space-y-1.5">
-          <p className="text-foreground text-sm font-medium">{t('empty.title')}</p>
-          <p className="text-muted-foreground text-xs leading-relaxed">{t('empty.hint')}</p>
+          <p className="text-foreground text-sm font-medium text-balance">{t('empty.title')}</p>
+          <p className="text-muted-foreground text-xs leading-relaxed text-balance">{t('empty.hint')}</p>
         </div>
         <div className="bg-surface-raised border-border/70 flex flex-col gap-2.5 rounded-xl border p-3.5 text-left shadow-sm">
           <ShortcutHint command="document.loadSample" label={t('empty.loadSample')} />
@@ -115,13 +117,13 @@ function DocumentWorkspace({ tabId, value }: { tabId: string; value: string }) {
     [wordWrap],
   )
 
-  const handleMount = useCallback(
-    (instance: editor.IStandaloneCodeEditor) => {
-      attachEditor(instance)
+  const handleMount: OnMount = useCallback(
+    (instance, monaco) => {
+      attachEditor(instance, monaco)
 
       instance.onMouseDown((event) => {
         const { type, position } = event.target
-        if (type !== monacoEditor.MouseTargetType.GUTTER_GLYPH_MARGIN || !position) return
+        if (type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN || !position) return
         toggleFoldOnLine(position.lineNumber)
       })
 
@@ -168,19 +170,10 @@ function DocumentWorkspace({ tabId, value }: { tabId: string; value: string }) {
   )
 }
 
-/**
- * Disposes models left behind by closed tabs. It runs after commit, once React
- * has already pointed the editor at a surviving tab, and skips anything still
- * attached — disposing an attached model leaves the editor holding a dead one.
- */
+/** Disposes models left behind by closed tabs, after React has re-pointed the editor. */
 function useOrphanModelReaper(tabIds: string[]) {
-  useEffect(() => {
-    const live = new Set(tabIds)
-    for (const model of monacoEditor.getModels()) {
-      const owner = tabIdFromUri(model.uri.toString())
-      if (owner && !live.has(owner) && !model.isAttachedToEditor()) model.dispose()
-    }
-  }, [tabIds])
+  const reapOrphanModels = useEditorStore((state) => state.reapOrphanModels)
+  useEffect(() => reapOrphanModels(tabIds), [tabIds, reapOrphanModels])
 }
 
 export function EditorWorkspace() {

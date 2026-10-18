@@ -1,0 +1,167 @@
+/*
+ * Product-site surface. Builds on the app's tokens (`src/index.css`) and adds
+ * only what a long, scrolling page needs: a quiet grid behind the hero,
+ * pointer-tracked card highlights and scroll reveals.
+ *
+ * Deliberately flat: one brand blue, neutral surfaces, no gradient text and no
+ * coloured glows.
+ */
+
+:root {
+  --site-wash: oklch(0.54 0.191 257.5 / 0.07);
+  --site-grid-line: oklch(0.145 0 0 / 0.055);
+  --site-spotlight: oklch(0.54 0.191 257.5 / 0.06);
+
+  /* Syntax colours, mirroring the editor themes in components/monaco/themes.ts. */
+  --tok-key: #0550ae;
+  --tok-string: #116329;
+  --tok-number: #8250df;
+  --tok-literal: #cf222e;
+  --tok-punctuation: #6e7781;
+}
+
+.dark {
+  --site-wash: oklch(0.646 0.188 257.4 / 0.09);
+  --site-grid-line: oklch(1 0 0 / 0.05);
+  --site-spotlight: oklch(1 0 0 / 0.04);
+
+  --tok-key: #79c0ff;
+  --tok-string: #7ee787;
+  --tok-number: #d2a8ff;
+  --tok-literal: #ff7b72;
+  --tok-punctuation: #8b949e;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+@layer components {
+  /* A hairline grid that fades out from the centre of the hero. */
+  .site-grid {
+    background-image:
+      linear-gradient(to right, var(--site-grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--site-grid-line) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black 30%, transparent 75%);
+  }
+
+  /* A faint wash of the brand colour at the top of the hero — depth, not glow. */
+  .site-wash {
+    background: radial-gradient(60% 100% at 50% 0%, var(--site-wash), transparent 70%);
+  }
+
+  /* Cards light up under the pointer; `--x`/`--y` come from `useSpotlight`. */
+  .spotlight {
+    position: relative;
+    isolation: isolate;
+  }
+  .spotlight::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(
+      420px circle at var(--x, 50%) var(--y, -20%),
+      var(--site-spotlight),
+      transparent 60%
+    );
+    opacity: 0;
+    transition: opacity 300ms ease;
+  }
+  .spotlight:hover::before {
+    opacity: 1;
+  }
+
+  /* Scroll reveal, toggled by `useReveal`. Never hides content without JS. */
+  .reveal {
+    transition:
+      opacity 700ms cubic-bezier(0.2, 0.7, 0.2, 1),
+      transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .reveal[data-revealed='false'] {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      transition: none;
+    }
+    .reveal[data-revealed='false'] {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* A physical keycap, larger and more tactile than the app's `.kbd-hint`. */
+  .keycap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    padding-inline: 0.75rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border);
+    background: linear-gradient(to bottom, var(--background), var(--muted));
+    box-shadow:
+      inset 0 -2px 0 0 var(--border),
+      0 1px 2px 0 oklch(0 0 0 / 0.06);
+    color: var(--foreground);
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  /* The Nested String Fold chip, drawn exactly as the editor draws it. */
+  .fold-chip {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    flex: none;
+    cursor: pointer;
+    background-color: var(--fold-marker);
+    mask-repeat: no-repeat;
+    mask-size: 14px 14px;
+    transition: background-color 120ms ease;
+  }
+  .fold-chip:hover,
+  .fold-chip:focus-visible {
+    background-color: var(--fold-marker-hover);
+  }
+  .fold-chip[data-kind='expand'] {
+    mask-image: var(--fold-mask-expand);
+  }
+  .fold-chip[data-kind='collapse'] {
+    mask-image: var(--fold-mask-collapse);
+  }
+
+  .tok-key {
+    color: var(--tok-key);
+  }
+  .tok-string {
+    color: var(--tok-string);
+  }
+  .tok-number {
+    color: var(--tok-number);
+  }
+  .tok-literal {
+    color: var(--tok-literal);
+  }
+  .tok-punctuation {
+    color: var(--tok-punctuation);
+  }
+}
+
+/* A code line too long for its panel trails off instead of scrolling. */
+.line-fade {
+  mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent);
+}

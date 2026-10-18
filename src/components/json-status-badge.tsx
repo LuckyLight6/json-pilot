@@ -8,7 +8,8 @@ import { useActiveDocument, useEditorStore } from '@/store/editor-store'
 export function JsonStatusBadge() {
   const { t } = useI18n()
   const document = useActiveDocument()
-  const isEmpty = (document?.value ?? '').trim().length === 0
+  // Stops at the first non-blank character instead of trimming the whole document.
+  const isEmpty = !/\S/.test(document?.value ?? '')
   const errorCount = useEditorStore((state) => state.errors.length)
   const goToFirstError = useEditorStore((state) => state.goToFirstError)
 
@@ -33,7 +34,7 @@ export function JsonStatusBadge() {
   }
 
   return (
-    <Badge asChild variant="destructive" className="h-5 cursor-pointer gap-1 rounded-full px-2 font-mono text-[10px] font-normal tabular-nums">
+    <Badge asChild variant="destructive" className="hover:bg-destructive/90 focus-visible:bg-destructive/80 h-5 cursor-pointer gap-1 rounded-full px-2 font-mono text-[10px] font-normal tabular-nums">
       <button type="button" title={t('status.jumpToError')} onClick={goToFirstError}>
         <CircleAlert aria-hidden />
         {errorCount === 1 ? t('status.errorsOne') : t('status.errors', { count: errorCount })}

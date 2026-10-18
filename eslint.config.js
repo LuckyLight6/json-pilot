@@ -7,7 +7,22 @@ import importPlugin from 'eslint-plugin-import'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config([
-  { ignores: ['dist'] },
+  { ignores: ['dist', '.pnpm-store'] },
+  {
+    // Node-side tooling such as scripts/render-promo.mjs.
+    files: ['**/*.{js,mjs}'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: globals.node,
+    },
+  },
+  {
+    // The promo film runs in a browser page, not in Node.
+    files: ['scripts/promo/**/*.js'],
+    languageOptions: { globals: globals.browser },
+  },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

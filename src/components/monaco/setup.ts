@@ -10,7 +10,22 @@ self.MonacoEnvironment = {
   getWorker: (_workerId, label) => (label === 'json' ? new jsonWorker() : new editorWorker()),
 }
 
+import { defineMonacoThemes } from './themes'
+
 loader.config({ monaco })
+
+// Before any editor mounts: `@monaco-editor/react` applies the theme by name.
+defineMonacoThemes(monaco)
+
+// Documents are JSONC, as every transform and query already reads them: Monaco's
+// JSON mode flags comments as errors by default. Comments are fine, and a
+// trailing comma only earns a warning — Format keeps it, Minify drops it.
+monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+  ...monaco.languages.json.jsonDefaults.diagnosticsOptions,
+  allowComments: true,
+  comments: 'ignore',
+  trailingCommas: 'warning',
+})
 
 // Unbind the Monaco defaults that collide with JSON Pilot's own shortcuts.
 // The window-capture dispatcher already swallows our chords first, but if the

@@ -1,15 +1,31 @@
 import { create } from 'zustand'
 
 import { COMMANDS, type CommandId } from '@/commands/registry'
-import { parseBinding } from '@/lib/shortcuts'
+import { buildBindingIndex, parseBinding, type BindingIndex } from '@/lib/shortcuts'
 
 const STORAGE_KEY = 'json-pilot.keybindings'
 
 type BindingOverrides = Partial<Record<CommandId, string>>
 
+const DEFAULT_BINDINGS = new Map(COMMANDS.map((command) => [command.id, command.defaultBinding]))
+
+/** The effective keymap, in registry order so the first command wins a clash. */
+function indexKeymap(overrides: BindingOverrides): BindingIndex<CommandId> {
+  return buildBindingIndex(COMMANDS.map((command) => [command.id, overrides[command.id] ?? command.defaultBinding] as const))
+}
+
 interface KeybindingsState {
   /** Only what the user changed; defaults stay in the command registry. */
   overrides: BindingOverrides
+  /** The effective keymap pre-parsed for the dispatcher; rebuilt on every change. */
+  index: BindingIndex<CommandId>
+  /**
+   * True while the shortcuts dialog is recording a new binding. The global
+   * dispatcher is registered first and would otherwise run whatever command
+   * the keys being recorded are currently bound to.
+   */
+  recording: boolean
+  setRecording: (recording: boolean) => void
   bindingFor: (id: CommandId) => string
   /** The command a binding would trigger, ignoring `except` — for clash checks. */
   commandUsing: (binding: string, except?: CommandId) => CommandId | null
@@ -30,7 +46,9 @@ function readOverrides(): BindingOverrides {
     const known = new Set(COMMANDS.map((command) => command.id))
     return Object.fromEntries(
       Object.entries(parsed as Record<string, unknown>).filter(
-        ([id, binding]) => known.has(id as CommandId) && typeof binding === 'string' && parseBinding(binding),
+        // An empty string is a deliberately removed shortcut, not a stale one.
+        ([id, binding]) =>
+          known.has(id as CommandId) && typeof binding === 'string' && (binding === '' || parseBinding(binding)),
       ),
     ) as BindingOverrides
   } catch {
@@ -46,35 +64,36 @@ function writeOverrides(overrides: BindingOverrides): void {
   }
 }
 
-export const useKeybindingsStore = create<KeybindingsState>((set, get) => ({
-  overrides: readOverrides(),
+const initialOverrides = readOverrides()
 
-  bindingFor: (id) =>
-    get().overrides[id] ?? COMMANDS.find((command) => command.id === id)?.defaultBinding ?? '',
+export const useKeybindingsStore = create<KeybindingsState>((set, get) => {
+  const apply = (overrides: BindingOverrides) => {
+    writeOverrides(overrides)
+    set({ overrides, index: indexKeymap(overrides) })
+  }
 
-  commandUsing: (binding, except) => {
-    const { bindingFor } = get()
-    const match = COMMANDS.find((command) => command.id !== except && bindingFor(command.id) === binding)
-    return match?.id ?? null
-  },
+  return {
+    overrides: initialOverrides,
+    index: indexKeymap(initialOverrides),
+    recording: false,
+    setRecording: (recording) => set({ recording }),
 
-  rebind: (id, binding) =>
-    set((state) => {
-      const overrides = { ...state.overrides, [id]: binding }
-      writeOverrides(overrides)
-      return { overrides }
-    }),
+    bindingFor: (id) => get().overrides[id] ?? DEFAULT_BINDINGS.get(id) ?? '',
 
-  reset: (id) =>
-    set((state) => {
-      const overrides = { ...state.overrides }
+    commandUsing: (binding, except) => {
+      const { bindingFor } = get()
+      const match = COMMANDS.find((command) => command.id !== except && bindingFor(command.id) === binding)
+      return match?.id ?? null
+    },
+
+    rebind: (id, binding) => apply({ ...get().overrides, [id]: binding }),
+
+    reset: (id) => {
+      const overrides = { ...get().overrides }
       delete overrides[id]
-      writeOverrides(overrides)
-      return { overrides }
-    }),
+      apply(overrides)
+    },
 
-  resetAll: () => {
-    writeOverrides({})
-    set({ overrides: {} })
-  },
-}))
+    resetAll: () => apply({}),
+  }
+})

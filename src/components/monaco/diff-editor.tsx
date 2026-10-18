@@ -1,10 +1,9 @@
 import { DiffEditor as MonacoDiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import { useMemo } from 'react'
 
+import { EditorSkeleton } from './editor-skeleton'
 import { DIFF_EDITOR_OPTIONS } from './options'
 import './setup'
-
-import { useI18n } from '@/i18n'
 
 interface DiffEditorProps {
   /**
@@ -29,7 +28,6 @@ export function DiffEditor({
   wordWrap,
   onMount,
 }: DiffEditorProps) {
-  const { t } = useI18n()
   // Monaco copies `diffWordWrap` onto both panes as `wordWrapOverride1`, which
   // outranks `wordWrap`. Set both to the same thing so the two panes agree with
   // each other and with the single-document editor.
@@ -51,7 +49,7 @@ export function DiffEditor({
       keepCurrentOriginalModel
       keepCurrentModifiedModel
       theme={theme}
-      loading={<div className="text-muted-foreground p-4 text-sm">{t('editor.loading')}</div>}
+      loading={<EditorSkeleton />}
       options={options}
       onMount={onMount}
     />
