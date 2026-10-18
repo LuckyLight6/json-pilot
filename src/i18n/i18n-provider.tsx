@@ -27,12 +27,14 @@ interface I18nValue {
 const I18nContext = createContext<I18nValue | null>(null)
 
 function browserLanguages(): readonly string[] {
+  if (typeof navigator === 'undefined') return []
   return navigator.languages ?? [navigator.language]
 }
 
-export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [preference, setPreferenceState] = useState<LocalePreference>(() =>
-    readPreference(STORAGE_KEY, LOCALE_PREFERENCES, 'system'),
+/** `locale` pins the language, for prerendering a page in each one at build time. */
+export function I18nProvider({ children, locale: pinned }: { children: React.ReactNode; locale?: Locale }) {
+  const [preference, setPreferenceState] = useState<LocalePreference>(
+    () => pinned ?? readPreference(STORAGE_KEY, LOCALE_PREFERENCES, 'system'),
   )
 
   const locale = resolveLocale(preference, browserLanguages())

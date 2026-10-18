@@ -228,6 +228,9 @@ export function bindingKeys(binding: string, isMac: boolean): string[][] {
 
 /** True when the platform is macOS, where `Mod` means Cmd. */
 export function isMacPlatform(): boolean {
+  // At build time (the site is prerendered) there is no navigator: show the
+  // Mac glyphs, which the page swaps for Windows names once it runs.
+  if (typeof navigator === 'undefined') return true
   return /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent)
 }
 

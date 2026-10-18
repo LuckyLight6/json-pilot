@@ -153,6 +153,7 @@ Monaco is by far the largest dependency, so the editor is built to never wait fo
 - **Only JSON ships.** `monaco-editor` is aliased to [`monaco-json.ts`](src/components/monaco/monaco-json.ts), which registers the JSON language alone instead of ~80 grammars and the CSS, HTML and TypeScript services (−570 kB minified)
 - **Monaco loads lazily.** Nothing outside [`components/monaco/`](src/components/monaco/) imports it at runtime; the store receives the API when the first editor mounts. The header, tabs, query bar and empty state paint first, and the editor streams in behind a loading bar
 - **The site never loads the editor.** The product site and the editor are separate entries that share only React and the UI primitives
+- **The site paints from its HTML alone.** The build renders the page in both languages ([`prerender.mjs`](scripts/prerender.mjs)) and inlines both pages' CSS, so the first screen needs a single request; the script then takes over the same markup without a visible change
 - **Transforms stay linear.** Minifying a 1 MB document takes about 50 ms; it used to rebuild the string once per whitespace token and took about 18 s
 - **Keystrokes stay cheap.** The shortcut dispatcher looks chords up in a pre-built index instead of re-parsing the keymap on every key press
 
@@ -162,9 +163,9 @@ Measured on the production build — gzip, cold cache, headless Chrome, median o
 |---|---|---|
 | Editor — first paint, before → after | 6.3 s → **1.2 s** | 1.5 s → **0.5 s** |
 | Editor — ready to type, before → after | 6.3 s → 5.9 s | 1.7 s → 1.5 s |
-| Product site — first paint | **1.2 s** (125 kB) | **0.3 s** |
+| Product site — headline on screen, before → after | 1.9 s → **0.3 s** | 1.1 s → **0.15 s** |
 
-Before, nothing at all was drawn until Monaco had fully arrived; now the editor's UI is usable at once while the editor itself loads.
+Before, nothing at all was drawn until Monaco had fully arrived; now the editor's UI is usable at once while the editor itself loads. On a congested link (1.5 s round trips, 12 KB/s) the site's headline now shows after 2.8 s instead of 14.8 s; it becomes interactive a little later than before (16 s rather than 14 s), since the larger HTML shares the link with the scripts.
 
 ## Project structure
 
@@ -175,6 +176,7 @@ scripts/
 ├── chrome.mjs                  # Tiny headless-Chrome driver shared by the scripts
 ├── promo/                      # The intro film: timeline, styles, soundtrack, encoders
 ├── lib/mp4.mjs                 # Minimal MP4 writer (H.264 + AAC)
+├── prerender.mjs               # After `vite build`: prerenders the site, inlines CSS
 ├── render-promo.mjs            # Renders public/media/promo-*.mp4 from scripts/promo/
 ├── capture-screenshots.mjs     # Captures public/media/screenshot-*.webp from the dev server
 └── render-assets.mjs           # Renders public/icons/* and public/og-image.png

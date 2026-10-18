@@ -1,20 +1,11 @@
-import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import '@/index.css'
 import './site.css'
 
-import { LandingPage } from './landing-page'
+import { SiteApp } from './site-app'
 
-import { I18nProvider } from '@/i18n'
-import { ThemeProvider } from '@/theme'
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ThemeProvider>
-      <I18nProvider>
-        <LandingPage />
-      </I18nProvider>
-    </ThemeProvider>
-  </StrictMode>,
-)
+// The build prerenders the page into #root (see scripts/prerender.mjs), so it
+// shows before this script arrives. Rendering here replaces that markup with
+// the same page, now live; nothing visibly changes.
+createRoot(document.getElementById('root')!).render(<SiteApp />)

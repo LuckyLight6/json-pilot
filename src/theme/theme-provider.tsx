@@ -24,7 +24,8 @@ const ThemeContext = createContext<ThemeValue | null>(null)
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => readPreference(STORAGE_KEY, THEMES, 'system'))
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(() =>
-    window.matchMedia(DARK_QUERY).matches ? 'dark' : 'light',
+    // No window when the site is prerendered at build time.
+    typeof window !== 'undefined' && window.matchMedia(DARK_QUERY).matches ? 'dark' : 'light',
   )
 
   // Keep `system` live: the OS palette can flip while the app is open.

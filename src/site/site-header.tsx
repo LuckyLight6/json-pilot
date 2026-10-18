@@ -84,8 +84,7 @@ function LanguageMenu() {
 
 function ThemeMenu() {
   const copy = useSiteCopy()
-  const { theme, resolvedTheme, setTheme } = useTheme()
-  const TriggerIcon = resolvedTheme === 'dark' ? Moon : Sun
+  const { theme, setTheme } = useTheme()
   return (
     <HeaderMenu
       trigger={
@@ -96,7 +95,10 @@ function ThemeMenu() {
           aria-label={copy.nav.theme}
           title={copy.nav.theme}
         >
-          <TriggerIcon className="size-4" aria-hidden />
+          {/* Picked by the theme class, not by script, so the prerendered
+              page shows the right one before any script runs. */}
+          <Sun className="size-4 dark:hidden" aria-hidden />
+          <Moon className="hidden size-4 dark:block" aria-hidden />
         </Button>
       }
     >

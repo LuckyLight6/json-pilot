@@ -16,8 +16,6 @@ function mediaPath(locale: string, theme: string, extension: string): string {
   return `./media/promo-${locale}-${theme}.${extension}`
 }
 
-/** Each film's own background, shown behind it while it loads. */
-const FILM_BACKGROUND = { dark: 'bg-[#060a12]', light: 'bg-[#f4f7fb]' } as const
 
 /** Controls float on the film as frosted glass in the page's own colours. */
 const CONTROL =
@@ -42,11 +40,12 @@ export function DemoVideo() {
   const [playing, setPlaying] = useState(false)
   const [muted, setMuted] = useState(false)
   const [progress, setProgress] = useState(0)
+  /** Until the film first plays, the posters show instead of the video element. */
+  const [started, setStarted] = useState(false)
   /** Where the previous file was when the theme or language swapped it, and whether it was playing. */
   const resume = useRef({ at: 0, playing: false })
 
   const source = mediaPath(locale, resolvedTheme, 'mp4')
-  const poster = mediaPath(locale, resolvedTheme, 'webp')
 
   const play = () => void videoRef.current?.play().catch(() => {})
 
@@ -89,23 +88,38 @@ export function DemoVideo() {
   }
 
   return (
-    <div
-      className={cn(
-        // An even, close shadow: a long offset one made the sides look bowed.
-        'group relative aspect-[16/10] overflow-hidden rounded-2xl border shadow-[0_1px_2px_oklch(0_0_0/0.04),0_6px_20px_oklch(0_0_0/0.06)] dark:shadow-none',
-        FILM_BACKGROUND[resolvedTheme],
-      )}
-    >
+    // An even, close shadow: a long offset one made the sides look bowed. The
+    // background is each film's own, so the frame never flashes while it loads.
+    <div className="group relative aspect-[16/10] overflow-hidden rounded-2xl border bg-[#f4f7fb] shadow-[0_1px_2px_oklch(0_0_0/0.04),0_6px_20px_oklch(0_0_0/0.06)] dark:bg-[#060a12] dark:shadow-none">
+      {/* Posters as images, picked by the theme class rather than by script, so
+          the prerendered page already shows the right one — and, lazy, they
+          wait until the film is near the viewport. */}
+      <img
+        src={mediaPath(locale, 'light', 'webp')}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className="absolute inset-0 size-full object-cover dark:hidden"
+      />
+      <img
+        src={mediaPath(locale, 'dark', 'webp')}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className="absolute inset-0 hidden size-full object-cover dark:block"
+      />
       <video
         key={source}
         ref={videoRef}
-        className="absolute inset-0 size-full object-cover"
-        poster={poster}
+        className={cn('absolute inset-0 size-full object-cover', !started && 'opacity-0')}
         muted={muted}
         playsInline
         preload="none"
         aria-label={copy.demo.title}
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setStarted(true)
+          setPlaying(true)
+        }}
         onPause={() => setPlaying(false)}
         onEnded={() => setProgress(0)}
         onVolumeChange={(event) => setMuted(event.currentTarget.muted)}

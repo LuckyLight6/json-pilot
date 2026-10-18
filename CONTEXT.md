@@ -73,7 +73,7 @@ _Avoid_: `vs` / `vs-dark` (the stock themes, whose dark canvas is lighter than o
 _Avoid_: importing `monaco-editor` at runtime anywhere else (type-only imports are fine)
 
 **产品站 (Product Site)**:
-The marketing page at `/` — `index.html` and `src/site/`. The editor lives at `/app/` (`app/index.html`). The two are separate Vite entries that share React, the UI primitives, `ThemeProvider` and `I18nProvider`, and therefore the `json-pilot.theme` / `json-pilot.locale` preferences; the site never loads Monaco. Its copy lives in `src/site/copy.ts`, apart from the editor's message catalogue.
+The marketing page at `/` — `index.html` and `src/site/`. The editor lives at `/app/` (`app/index.html`). The two are separate Vite entries that share React, the UI primitives, `ThemeProvider` and `I18nProvider`, and therefore the `json-pilot.theme` / `json-pilot.locale` preferences; the site never loads Monaco. Its copy lives in `src/site/copy.ts`, apart from the editor's message catalogue. The build prerenders it (`scripts/prerender.mjs`): `src/site/prerender.tsx` renders `SiteApp` once per locale into `dist/index.html`, CSS shows the copy the head script's language picked, and `main.tsx` then replaces it with the live page. `Reveal` starts visible on a prerendered page and hides only what is still below the fold.
 _Avoid_: landing (in code), homepage when meaning the editor
 
 **查询结果形状 (Query Result Shape)**:
@@ -92,6 +92,7 @@ _Avoid_: GIF, screencast, demo recording (the film is motion graphics, not a cap
 - **Store subscriptions always use a selector.** `useEditorStore()` without one re-renders on every keystroke.
 - **Monaco handles (editor instances, decoration collections) live outside the store**, since they are imperative and never rendered.
 - **Only `components/monaco/` imports `monaco-editor` at runtime.** Everywhere else uses `import type`; see Lazy Boundary. `vite build` warns if the Monaco chunk grows past its known size, which is what a stray import of the full package looks like.
+- **The site renders at build time**, under Node: its components touch `window`, `document`, `navigator` and `localStorage` only in effects and event handlers, or behind a `typeof` guard. Anything that depends on the theme is picked by the `dark` class in CSS, not by script, so the prerendered page is already right.
 - **Toolbar buttons carry `data-command`**, the command id, so scripts can find them in any locale.
 - **The keydown path stays allocation-light.** The dispatcher resolves chords through `useKeybindingsStore`'s pre-built `index`; never parse bindings per key press.
 - **Syntax colours live in three places**: the Monaco themes, the site's `--tok-*` variables and the film's `--tok-*` in `scripts/promo/promo.css`. Change them together, keep every token at WCAG AA, then re-capture the screenshots and re-render the film.

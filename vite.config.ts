@@ -65,6 +65,10 @@ export default defineConfig({
     // tight ceiling around that known editor asset so unrelated bundle growth
     // — or a stray import that drags the full language set back in — shows up.
     chunkSizeWarningLimit: 3400,
+    // The logo appears several times on the prerendered site; as a file it
+    // downloads once (the favicon already fetches it) instead of riding along
+    // as a data URI in every copy.
+    assetsInlineLimit: (file) => (file.endsWith('/assets/icon.svg') ? false : undefined),
     rollupOptions: {
       input: {
         site: path.resolve(__dirname, 'index.html'),

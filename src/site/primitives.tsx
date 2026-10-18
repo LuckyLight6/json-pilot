@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
 
 import { SITE_COPY, type SiteCopy } from './copy'
 
@@ -11,9 +11,22 @@ export function useSiteCopy(): SiteCopy {
 }
 
 /**
- * Fades its children up the first time they scroll into view. Content that is
- * already on screen at load is revealed immediately, and reduced-motion users
- * get no movement at all (see `.reveal` in `site.css`).
+ * True while rendering at build time, or while the page is taking over the
+ * HTML the build prerendered (`data-prerendered` on the root; see
+ * `scripts/prerender.mjs`): either way, the content is already meant to show.
+ */
+function startsVisible(): boolean {
+  return typeof document === 'undefined' || document.getElementById('root')?.hasAttribute('data-prerendered') === true
+}
+
+/**
+ * Fades its children up the first time they scroll into view, and reduced-motion
+ * users get no movement at all (see `.reveal` in `site.css`).
+ *
+ * On a prerendered page everything starts visible, so the first paint — before
+ * any script has arrived — shows the whole page. When the script takes over, it
+ * keeps what the visitor can already see and hides only what is still below
+ * the fold, before the next paint, so that part still reveals on scroll.
  */
 export function Reveal({
   children,
@@ -26,7 +39,13 @@ export function Reveal({
   delay?: number
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  const [revealed, setRevealed] = useState(false)
+  const [visibleAtStart] = useState(startsVisible)
+  const [revealed, setRevealed] = useState(visibleAtStart)
+
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (visibleAtStart && element && element.getBoundingClientRect().top > window.innerHeight) setRevealed(false)
+  }, [visibleAtStart])
 
   useEffect(() => {
     const element = ref.current
