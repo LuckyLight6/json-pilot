@@ -24,6 +24,10 @@ export default tseslint.config([
     languageOptions: { globals: globals.browser },
   },
   {
+    files: ['scripts/service-worker.js'],
+    languageOptions: { globals: globals.serviceworker },
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     extends: [
       js.configs.recommended,

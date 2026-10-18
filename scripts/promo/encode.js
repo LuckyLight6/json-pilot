@@ -15,14 +15,16 @@ const toBase64 = (bytes) => btoa(String.fromCharCode(...bytes))
 
 /**
  * H.264-encodes frames `from` (inclusive) to `to` (exclusive), fetched as
- * `/frames/<index>.jpg`. The run starts on a keyframe, so runs encoded in
+ * `/frames/<index>.jpg` and scaled to `width`×`height` when the rendition is
+ * smaller than the capture. The run starts on a keyframe, so runs encoded in
  * separate browser sessions can be concatenated as long as their parameter
  * sets (`avcC`) match.
  */
 export async function encodeVideo({ name, from, to, fps, width, height, quantizer, keyInterval }) {
   const config = {
-    // High profile, level 5.1: level 4.x tops out below this frame size.
-    codec: 'avc1.640033',
+    // High profile. Level 4.0 covers frames up to 2048×1024 and plays on any
+    // phone; bigger frames need level 5.1.
+    codec: width * height <= 2048 * 1024 ? 'avc1.640028' : 'avc1.640033',
     width,
     height,
     // Constant quality rather than a bitrate target: quiet frames cost almost
@@ -52,14 +54,20 @@ export async function encodeVideo({ name, from, to, fps, width, height, quantize
   })
   encoder.configure(config)
 
-  const load = async (index) => createImageBitmap(await (await fetch(`/frames/${index}.jpg`)).blob())
+  const load = async (index) => {
+    const frame = await createImageBitmap(await (await fetch(`/frames/${index}.jpg`)).blob())
+    if (frame.width * height !== frame.height * width) {
+      throw new Error(`frame ${index} is ${frame.width}×${frame.height}, not the shape of ${width}×${height}`)
+    }
+    if (frame.width === width) return frame
+    const scaled = await createImageBitmap(frame, { resizeWidth: width, resizeHeight: height, resizeQuality: 'high' })
+    frame.close()
+    return scaled
+  }
   let next = load(from)
   for (let index = from; index < to; index++) {
     const bitmap = await next
     if (index + 1 < to) next = load(index + 1)
-    if (bitmap.width !== width || bitmap.height !== height) {
-      throw new Error(`frame ${index} is ${bitmap.width}×${bitmap.height}, expected ${width}×${height}`)
-    }
     const frame = new VideoFrame(bitmap, { timestamp: Math.round((index * 1e6) / fps), duration: Math.round(1e6 / fps) })
     encoder.encode(frame, { keyFrame: (index - from) % keyInterval === 0, avc: { quantizer } })
     frame.close()

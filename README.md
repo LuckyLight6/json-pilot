@@ -141,19 +141,27 @@ soundtrack to AAC with WebCodecs, and writes the MP4 itself
 the film with a licensed track instead, pass `-- --music path/to/track.mp3`;
 the sound effects are kept.
 
-The video is H.264 at a constant quantizer rather than a bitrate target —
-measured against the captured frames, that is visually lossless (≥ 46 dB PSNR
-on every sampled frame) at about 8 MB per film. The site never autoplays it:
-only the poster loads until the visitor presses play.
+Each film comes in two renditions, both H.264 at a constant quantizer rather
+than a bitrate target: HD, 2240×1400 and about 8 MB — measured against the
+captured frames, visually lossless (≥ 46 dB PSNR on every sampled frame) — and
+SD, 1280×800 at about 1 Mb/s and 3 MB. The site never autoplays the film: only
+the poster loads until the visitor presses play. It picks HD only where the
+film shows wider than 1,440 device pixels and a download from the site has
+measured at least 5 Mb/s, and if HD is slow to start or stalls it carries on
+in SD from the same moment ([`film-rendition.ts`](src/site/film-rendition.ts)).
+`pnpm render:promo -- --renditions sd` renders the SD files alone.
 
 ## Performance
 
 Monaco is by far the largest dependency, so the editor is built to never wait for it:
 
-- **Only JSON ships.** `monaco-editor` is aliased to [`monaco-json.ts`](src/components/monaco/monaco-json.ts), which registers the JSON language alone instead of ~80 grammars and the CSS, HTML and TypeScript services (−570 kB minified)
+- **Only JSON ships.** `monaco-editor` is aliased to [`monaco-json.ts`](src/components/monaco/monaco-json.ts), which registers the JSON language alone instead of ~80 grammars and the CSS, HTML and TypeScript services (−570 kB minified), and leaves out the editor contributions JSON has no use for, such as rename, go to definition and code lens (−43 kB gzip)
 - **Monaco loads lazily.** Nothing outside [`components/monaco/`](src/components/monaco/) imports it at runtime; the store receives the API when the first editor mounts. The header, tabs, query bar and empty state paint first, and the editor streams in behind a loading bar
 - **The site never loads the editor.** The product site and the editor are separate entries that share only React and the UI primitives
 - **The site paints from its HTML alone.** The build renders the page in both languages ([`prerender.mjs`](scripts/prerender.mjs)) and inlines both pages' CSS, so the first screen needs a single request; the script then takes over the same markup without a visible change
+- **Second visits download nothing.** A service worker ([`service-worker.js`](scripts/service-worker.js)) serves the hashed build files from its cache — GitHub Pages lets browsers cache for only ten minutes — and fetches pages network-first, falling back to the cache when the link is down or slow
+- **The site warms the editor.** A few seconds after the site loads, the service worker fetches the editor's files one at a time, so opening the editor from the site is instant. It skips this on Save-Data or 2G connections, and holds off while the intro film plays so the two never starve each other
+- **The film streams on slow links.** On small screens and slow links the site plays the film's SD rendition, and switches to it mid-film if HD stalls (see [The intro film](#the-intro-film))
 - **Transforms stay linear.** Minifying a 1 MB document takes about 50 ms; it used to rebuild the string once per whitespace token and took about 18 s
 - **Keystrokes stay cheap.** The shortcut dispatcher looks chords up in a pre-built index instead of re-parsing the keymap on every key press
 
@@ -167,6 +175,14 @@ Measured on the production build — gzip, cold cache, headless Chrome, median o
 
 Before, nothing at all was drawn until Monaco had fully arrived; now the editor's UI is usable at once while the editor itself loads. On a congested link (1.5 s round trips, 12 KB/s) the site's headline now shows after 2.8 s instead of 14.8 s; it becomes interactive a little later than before (16 s rather than 14 s), since the larger HTML shares the link with the scripts.
 
+The service worker, the film's SD rendition and the slimmer Monaco came after that; on the 1.6 Mbps link, against the release before them:
+
+| | Before | After |
+|---|---|---|
+| Editor, cold — ready to type | 6.0 s | **5.7 s** |
+| Editor opened from the site — ready to type | 6.0 s | **0.4 s** |
+| Intro film — stalls in its first 18 s | 4 | **0** |
+
 ## Project structure
 
 ```
@@ -177,6 +193,8 @@ scripts/
 ├── promo/                      # The intro film: timeline, styles, soundtrack, encoders
 ├── lib/mp4.mjs                 # Minimal MP4 writer (H.264 + AAC)
 ├── prerender.mjs               # After `vite build`: prerenders the site, inlines CSS
+├── service-worker.js           # The service worker: caches the build, warms the editor
+├── service-worker.mjs          # After prerendering: writes dist/sw.js with the editor's file list
 ├── render-promo.mjs            # Renders public/media/promo-*.mp4 from scripts/promo/
 ├── capture-screenshots.mjs     # Captures public/media/screenshot-*.webp from the dev server
 └── render-assets.mjs           # Renders public/icons/* and public/og-image.png
@@ -187,11 +205,11 @@ public/
 └── og-image.png                # Social share card
 src/
 ├── main.tsx · App.tsx          # Editor: layout — header, tabs, query bar, workspace, status bar
-├── site/                       # Product site: copy (en / zh-CN), sections, demo video
+├── site/                       # Product site: copy (en / zh-CN), sections, the film and its renditions
 ├── components/
 │   ├── monaco/                 # Everything that knows about Monaco — and the only runtime importer
 │   │   ├── lazy.tsx            # The lazy boundary: CodeEditor / DiffEditor behind Suspense
-│   │   ├── monaco-json.ts      # Slim runtime entry: the editor plus the JSON language only
+│   │   ├── monaco-json.ts      # Slim runtime entry: the editor features and language JSON uses
 │   │   ├── setup.ts            # Workers, loader config, themes, JSONC diagnostics, unbound default keys
 │   │   ├── themes.ts           # Light/dark themes cut from the design tokens
 │   │   ├── options.ts          # Editor option presets
@@ -207,7 +225,8 @@ src/
 │   ├── json/                   # Pure domain logic — no React, no Monaco (unit-tested)
 │   ├── shortcuts.ts            # Chord parsing, matching and display (pure)
 │   ├── tabs.ts · text.ts       # Tab identity and titles; line counting (pure)
-│   └── local-preference.ts     # Shared localStorage read/write for UI choices
+│   ├── local-preference.ts     # Shared localStorage read/write for UI choices
+│   └── service-worker.ts       # Registers the service worker once the page has loaded
 ├── store/                      # Editor state, keybinding overrides, view preferences
 └── theme/                      # Theme context and the matching Monaco theme
 ```

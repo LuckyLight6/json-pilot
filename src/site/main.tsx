@@ -9,3 +9,8 @@ import { SiteApp } from './site-app'
 // shows before this script arrives. Rendering here replaces that markup with
 // the same page, now live; nothing visibly changes.
 createRoot(document.getElementById('root')!).render(<SiteApp />)
+
+// Loaded lazily: it is not needed for the first paint.
+void import('@/lib/service-worker').then(({ registerServiceWorker }) =>
+  registerServiceWorker('./', { warmEditor: true }),
+)

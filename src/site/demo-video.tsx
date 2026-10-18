@@ -1,6 +1,7 @@
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
+import { pickRendition, rememberSlowLink, RENDITION_SUFFIX, type Rendition } from './film-rendition'
 import { useSiteCopy } from './primitives'
 
 import { useI18n } from '@/i18n'
@@ -9,13 +10,24 @@ import { useTheme } from '@/theme'
 
 /**
  * The intro film, one per locale and theme, so it speaks the visitor's
- * language and matches the page around it. Files live in `public/media/`;
+ * language and matches the page around it, in two renditions (see
+ * film-rendition.ts). Files live in `public/media/`;
  * `scripts/render-promo.mjs` renders them from `scripts/promo/`.
  */
-function mediaPath(locale: string, theme: string, extension: string): string {
-  return `./media/promo-${locale}-${theme}.${extension}`
+function mediaPath(locale: string, theme: string, extension: string, suffix = ''): string {
+  return `./media/promo-${locale}-${theme}${suffix}.${extension}`
 }
 
+/** HD starts within a second on a link that can carry it; longer means it cannot. */
+const HD_START_TIMEOUT_MS = 3000
+
+/**
+ * While the film streams, the service worker holds its editor warm-up
+ * (scripts/service-worker.js): on a slow link the two would starve each other.
+ */
+function tellServiceWorker(message: 'film-playing' | 'film-stopped'): void {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.controller?.postMessage(message)
+}
 
 /** Controls float on the film as frosted glass in the page's own colours. */
 const CONTROL =
@@ -30,7 +42,8 @@ export function playDemo(): void {
 /**
  * The film waits for the visitor: nothing downloads until they press play
  * (only the poster loads), and then it plays once, with sound — they asked
- * for it. Scrolling away pauses it.
+ * for it. Scrolling away pauses it. If HD is slow to start or stalls, it
+ * carries on in SD from the same moment.
  */
 export function DemoVideo() {
   const copy = useSiteCopy()
@@ -42,20 +55,40 @@ export function DemoVideo() {
   const [progress, setProgress] = useState(0)
   /** Until the film first plays, the posters show instead of the video element. */
   const [started, setStarted] = useState(false)
-  /** Where the previous file was when the theme or language swapped it, and whether it was playing. */
+  /** Where the previous file was when it was swapped, and whether it was playing. */
   const resume = useRef({ at: 0, playing: false })
+  const [rendition, setRendition] = useState<Rendition>(pickRendition)
+  /** Whether the current file has played yet: a wait before that is its start, not a stall. */
+  const begun = useRef(false)
+  const startTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  const source = mediaPath(locale, resolvedTheme, 'mp4')
+  const source = mediaPath(locale, resolvedTheme, 'mp4', RENDITION_SUFFIX[rendition])
 
   const play = () => void videoRef.current?.play().catch(() => {})
 
-  // Switching theme or language swaps the file; the new one carries on from
-  // the same moment, playing if the old one was, with the same sound setting.
-  useEffect(() => {
+  const fallBackToSd = () => {
+    if (rendition !== 'hd') return
+    rememberSlowLink()
+    setRendition('sd')
+  }
+
+  // Switching theme, language or rendition swaps the file; the new one carries
+  // on from the same moment, playing if the old one was, with the same sound
+  // setting. A layout effect, so the old element is read before the browser
+  // pauses it for leaving the page.
+  useLayoutEffect(() => {
     const video = videoRef.current
     if (video && resume.current.playing) void video.play().catch(() => {})
     return () => {
-      if (video) resume.current = { at: video.currentTime, playing: !video.paused }
+      clearTimeout(startTimer.current)
+      begun.current = false
+      if (!video) return
+      resume.current = { at: video.currentTime, playing: !video.paused }
+      // A swapped-out element would otherwise keep downloading.
+      if (!video.isConnected) {
+        video.removeAttribute('src')
+        video.load()
+      }
     }
   }, [source])
 
@@ -111,6 +144,7 @@ export function DemoVideo() {
       <video
         key={source}
         ref={videoRef}
+        src={source}
         className={cn('absolute inset-0 size-full object-cover', !started && 'opacity-0')}
         muted={muted}
         playsInline
@@ -119,8 +153,24 @@ export function DemoVideo() {
         onPlay={() => {
           setStarted(true)
           setPlaying(true)
+          tellServiceWorker('film-playing')
+          if (rendition === 'hd' && !begun.current) {
+            clearTimeout(startTimer.current)
+            startTimer.current = setTimeout(fallBackToSd, HD_START_TIMEOUT_MS)
+          }
         }}
-        onPause={() => setPlaying(false)}
+        onPlaying={() => {
+          begun.current = true
+          clearTimeout(startTimer.current)
+        }}
+        onWaiting={(event) => {
+          if (begun.current && !event.currentTarget.seeking) fallBackToSd()
+        }}
+        onPause={() => {
+          clearTimeout(startTimer.current)
+          setPlaying(false)
+          tellServiceWorker('film-stopped')
+        }}
         onEnded={() => setProgress(0)}
         onVolumeChange={(event) => setMuted(event.currentTarget.muted)}
         onLoadedMetadata={(event) => {
@@ -130,9 +180,7 @@ export function DemoVideo() {
           const { currentTime, duration } = event.currentTarget
           setProgress(duration ? currentTime / duration : 0)
         }}
-      >
-        <source src={source} type="video/mp4" />
-      </video>
+      />
 
       {/* Low in the frame, clear of the poster's logo and wordmark. */}
       {!playing && (

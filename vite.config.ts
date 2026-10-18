@@ -61,10 +61,13 @@ export default defineConfig({
   },
   build: {
     // Monaco is intentionally isolated below and, with only the JSON language
-    // registered, weighs about 3.3 MB minified (about 860 kB gzip). Keep a
-    // tight ceiling around that known editor asset so unrelated bundle growth
-    // — or a stray import that drags the full language set back in — shows up.
-    chunkSizeWarningLimit: 3400,
+    // and the contributions JSON uses, weighs about 3.1 MB minified (about
+    // 810 kB gzip). Keep a tight ceiling around that known editor asset so
+    // unrelated bundle growth — or a stray import that drags the full language
+    // set back in — shows up.
+    chunkSizeWarningLimit: 3200,
+    // Read by scripts/service-worker.mjs to list the editor's files, then removed.
+    manifest: true,
     // The logo appears several times on the prerendered site; as a file it
     // downloads once (the favicon already fetches it) instead of riding along
     // as a data URI in every copy.

@@ -9,3 +9,6 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+// Loaded lazily: it is not needed for the first paint.
+void import('@/lib/service-worker').then(({ registerServiceWorker }) => registerServiceWorker('../'))

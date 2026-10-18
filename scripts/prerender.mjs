@@ -70,7 +70,10 @@ for (const page of ['index.html', 'app/index.html']) {
   const html = read(page).replace(/<link rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/g, (_, href) => {
     const css = readFileSync(join(DIST, dirname(page), href), 'utf8')
     if (/url\((?!['"]?data:)/.test(css)) throw new Error(`${href} references files; inlining would break their paths`)
-    return `<style>${css}</style>`
+    // Vite's lazy loader adds a stylesheet a lazy chunk needs unless a <link>
+    // to it is already there. A disabled one is never fetched but still counts,
+    // so opening the editor does not download what is inlined here again.
+    return `<style>${css}</style><link rel="stylesheet" href="${href}" disabled>`
   })
   writeFileSync(join(DIST, page), html)
 }

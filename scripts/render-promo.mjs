@@ -11,11 +11,14 @@
  * and mux the two into an MP4 here in Node. Nothing beyond Chrome is needed.
  *
  * Output in public/media/:
- *   promo-<lang>-<theme>.mp4    the film, 2240×1400 at 30 fps, with sound
- *   promo-<lang>-<theme>.webp   its poster frame
+ *   promo-<lang>-<theme>.mp4      the film, 2240×1400 at 30 fps, with sound
+ *   promo-<lang>-<theme>-sd.mp4   the same at 1280×800, for small screens and
+ *                                 slow links (src/site/demo-video.tsx picks one)
+ *   promo-<lang>-<theme>.webp     its poster frame
  *
  * Options: --lang en|zh-CN   render one language
  *          --theme dark|light render one theme
+ *          --renditions hd,sd  render only these (the poster comes with hd)
  *          --music <file>    score the film with a licensed track instead of
  *                            the synthesised one (sound effects stay)
  *          --chrome <path>   Chrome binary
@@ -42,6 +45,7 @@ const option = (name, fallback) => {
 }
 const LANGS = option('--lang', null) ? [option('--lang')] : ['en', 'zh-CN']
 const THEMES = option('--theme', null) ? [option('--theme')] : ['dark', 'light']
+const RENDITION_NAMES = option('--renditions', 'hd,sd').split(',')
 const MUSIC = option('--music', null)
 const CHROME = option('--chrome', DEFAULT_CHROME)
 const KEEP_FRAMES = args.includes('--keep-frames')
@@ -53,12 +57,21 @@ const WIDTH = STAGE.width * STAGE.scale
 const HEIGHT = STAGE.height * STAGE.scale
 const FPS = 30
 /**
- * H.264 quantizer (lower is better, 0–51). Picked by measurement: against the
- * captured frames, 26 averages 47.4 dB PSNR with its worst frame at 46.6 dB —
- * visually lossless — at about 2.8 Mb/s, little more than half of what a
- * 5 Mb/s variable-bitrate encode needed for a worse worst frame (44.7 dB).
+ * Each film comes in two renditions, encoded at a constant H.264 quantizer
+ * (lower is better, 0–51) picked by measurement against the captured frames:
+ *
+ * - hd: 26 averages 47.4 dB PSNR with its worst frame at 46.6 dB — visually
+ *   lossless — at about 2.8 Mb/s, little more than half of what a 5 Mb/s
+ *   variable-bitrate encode needed for a worse worst frame (44.7 dB).
+ * - sd: a third of the pixels at 27, about 1 Mb/s, so it streams where HD
+ *   would stall (GitHub Pages can manage as little as 1.5 Mb/s from mainland
+ *   China) and still looks sharp on phones and standard-density screens.
  */
-const QUANTIZER = 26
+const RENDITIONS = [
+  { name: 'hd', suffix: '', width: WIDTH, height: HEIGHT, quantizer: 26 },
+  { name: 'sd', suffix: '-sd', width: 1280, height: 800, quantizer: 27 },
+].filter((rendition) => RENDITION_NAMES.includes(rendition.name))
+if (!RENDITIONS.length) throw new Error(`--renditions takes hd, sd or both, not ${RENDITION_NAMES.join(',')}`)
 const AUDIO_BITRATE = 192_000
 const SAMPLE_RATE = 48_000
 /** A keyframe every 8 s keeps seeking quick without paying for many. */
@@ -210,12 +223,12 @@ async function captureFrames({ name, query }, frames) {
   await Promise.all(Array.from({ length: WORKERS }, worker))
 }
 
-async function encodeFrames(variant, frames) {
+async function encodeFrames(variant, rendition, frames) {
   const samples = []
   let avcC = null
   for (let from = 0; from < frames; from += SEGMENT) {
     const to = Math.min(frames, from + SEGMENT)
-    const name = `video-${variant}-${from}`
+    const name = `video-${variant}-${rendition.name}-${from}`
     const result = await retrying(name, () =>
       session('/blank.html', (chrome) =>
         chrome.evaluate(
@@ -224,9 +237,9 @@ async function encodeFrames(variant, frames) {
           from,
           to,
           fps: FPS,
-          width: WIDTH,
-          height: HEIGHT,
-          quantizer: QUANTIZER,
+          width: rendition.width,
+          height: rendition.height,
+          quantizer: rendition.quantizer,
           keyInterval: KEY_INTERVAL,
         }),
         ),
@@ -302,7 +315,7 @@ mkdirSync(OUT_DIR, { recursive: true })
 try {
   const duration = await filmLength()
   const frames = Math.round(duration * FPS)
-  log(`film: ${duration} s, ${frames} frames at ${WIDTH}×${HEIGHT}`)
+  log(`film: ${duration} s, ${frames} frames, ${RENDITIONS.map((r) => `${r.name} ${r.width}×${r.height}`).join(' and ')}`)
 
   const audio = await retrying('soundtrack', renderSoundtrack)
   log(`soundtrack: ${MUSIC ? basename(MUSIC) : 'synthesised'}, ${audio.samples.length} AAC frames`)
@@ -313,26 +326,32 @@ try {
   for (const variant of variants) {
     state.framesDir = mkdtempSync(join(tmpdir(), `json-pilot-promo-${variant.name}-`))
     await captureFrames(variant, frames)
-    const video = await encodeFrames(variant.name, frames)
 
-    const poster = `promo-${variant.name}.webp`
-    await retrying(poster, () =>
-      session('/blank.html', (chrome) => chrome.evaluate(call('poster', { name: poster, index: POSTER_TIME * FPS }))),
-    )
-    writeFileSync(join(OUT_DIR, poster), uploads.get(poster))
-    uploads.delete(poster)
+    if (RENDITIONS.some((rendition) => rendition.name === 'hd')) {
+      const poster = `promo-${variant.name}.webp`
+      await retrying(poster, () =>
+        session('/blank.html', (chrome) => chrome.evaluate(call('poster', { name: poster, index: POSTER_TIME * FPS }))),
+      )
+      writeFileSync(join(OUT_DIR, poster), uploads.get(poster))
+      uploads.delete(poster)
+      log(`wrote ${poster}`)
+    }
 
-    const file = join(OUT_DIR, `promo-${variant.name}.mp4`)
-    writeFileSync(file, writeMp4({ video: { width: WIDTH, height: HEIGHT, fps: FPS, ...video }, audio }))
-    const check = await retrying('playback check', () => verify(file, duration))
-    const problems = [
-      Math.abs(check.duration - duration) > 0.1 && `duration ${check.duration}`,
-      (check.width !== WIDTH || check.height !== HEIGHT) && `size ${check.width}×${check.height}`,
-      check.light < 2 && 'a black frame mid-film',
-      Math.abs(check.audio - duration) > 0.2 && `soundtrack length ${check.audio}`,
-    ].filter(Boolean)
-    if (problems.length) throw new Error(`${basename(file)} failed playback checks: ${problems.join(', ')}`)
-    log(`wrote ${basename(file)} (${(statSync(file).size / 1e6).toFixed(1)} MB) and ${poster}; plays back at ${check.duration.toFixed(2)} s`)
+    for (const rendition of RENDITIONS) {
+      const { width, height } = rendition
+      const video = await encodeFrames(variant.name, rendition, frames)
+      const file = join(OUT_DIR, `promo-${variant.name}${rendition.suffix}.mp4`)
+      writeFileSync(file, writeMp4({ video: { width, height, fps: FPS, ...video }, audio }))
+      const check = await retrying('playback check', () => verify(file, duration))
+      const problems = [
+        Math.abs(check.duration - duration) > 0.1 && `duration ${check.duration}`,
+        (check.width !== width || check.height !== height) && `size ${check.width}×${check.height}`,
+        check.light < 2 && 'a black frame mid-film',
+        Math.abs(check.audio - duration) > 0.2 && `soundtrack length ${check.audio}`,
+      ].filter(Boolean)
+      if (problems.length) throw new Error(`${basename(file)} failed playback checks: ${problems.join(', ')}`)
+      log(`wrote ${basename(file)} (${(statSync(file).size / 1e6).toFixed(1)} MB); plays back at ${check.duration.toFixed(2)} s`)
+    }
 
     if (KEEP_FRAMES) log(`  frames kept in ${state.framesDir}`)
     else rmSync(state.framesDir, { recursive: true, force: true })
