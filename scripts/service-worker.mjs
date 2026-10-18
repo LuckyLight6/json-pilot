@@ -33,7 +33,8 @@ if (editor.size < 3) throw new Error('the build manifest does not describe the e
 // Monaco's web workers are emitted beside the chunks rather than imported by them.
 for (const file of readdirSync(join(DIST, 'assets'))) if (/\.worker-.*\.js$/.test(file)) editor.add(`assets/${file}`)
 
-const build = { editor: [...editor].filter((file) => !file.endsWith('.html')) }
+// The fallback favicon and the touch icon are only fetched by browsers that need them.
+const build = { editor: [...editor].filter((file) => !/\.html$|\/(favicon|apple-touch-icon)-/.test(file)) }
 const source = readFileSync(join(ROOT, 'scripts', 'service-worker.js'), 'utf8')
 if (!source.includes('self.__BUILD__')) throw new Error('scripts/service-worker.js has no BUILD placeholder')
 writeFileSync(join(DIST, 'sw.js'), source.replace('self.__BUILD__', JSON.stringify(build)))

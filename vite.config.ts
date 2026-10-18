@@ -68,10 +68,13 @@ export default defineConfig({
     chunkSizeWarningLimit: 3200,
     // Read by scripts/service-worker.mjs to list the editor's files, then removed.
     manifest: true,
-    // The logo appears several times on the prerendered site; as a file it
-    // downloads once (the favicon already fetches it) instead of riding along
-    // as a data URI in every copy.
-    assetsInlineLimit: (file) => (file.endsWith('/assets/icon.svg') ? false : undefined),
+    // Icons stay files. The logo appears several times on the prerendered
+    // site; as a file it downloads once (the favicon already fetches it)
+    // instead of riding along as a data URI in every copy. And browsers keep
+    // a favicon or touch icon for as long as its URL stays the same, so each
+    // needs a fingerprinted URL of its own.
+    assetsInlineLimit: (file) =>
+      /\/assets\/(icon\.svg|favicon\.ico|apple-touch-icon\.png)$/.test(file) ? false : undefined,
     rollupOptions: {
       input: {
         site: path.resolve(__dirname, 'index.html'),

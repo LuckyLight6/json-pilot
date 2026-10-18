@@ -2,10 +2,15 @@
 /**
  * Renders every raster brand asset from its source, so none of them can drift:
  *
- *   src/assets/icon.svg  →  public/icons/icon-192.png, icon-512.png
+ *   src/assets/icon.svg  →  src/assets/favicon.ico              (16, 32, 48: for browsers without SVG icons)
+ *                           src/assets/apple-touch-icon.png     (180, full bleed)
+ *                           public/icons/icon-192.png, icon-512.png
  *                           public/icons/icon-maskable-512.png  (full bleed, safe zone)
- *                           public/icons/apple-touch-icon.png   (180, full bleed)
  *   + an editor shot     →  public/og-image.png                 (1200×630 share card)
+ *
+ * The pages link the src/assets ones, so the build fingerprints them: a new
+ * icon gets a new URL, which is the only thing that makes browsers drop the
+ * one they cached. The manifest's icons are reread by the browser itself.
  *
  *   node scripts/render-assets.mjs [--chrome <path>]
  *
@@ -76,7 +81,7 @@ function sharePage(posterUrl, iconSvg) {
   <div class="shot"><img src="${posterUrl}" alt=""></div>`
 }
 
-async function render(html, width, height, file) {
+async function capture(html, width, height) {
   const chrome = await launchChrome({ binary: CHROME, width, height })
   try {
     await chrome.send('Page.enable')
@@ -85,22 +90,51 @@ async function render(html, width, height, file) {
     await chrome.send('Page.navigate', { url: dataUrl('text/html', html) })
     await sleep(600)
     const { data } = await chrome.send('Page.captureScreenshot', { format: 'png' })
-    mkdirSync(dirname(file), { recursive: true })
-    writeFileSync(file, Buffer.from(data, 'base64'))
-    console.log(`wrote ${file.replace(`${ROOT}/`, '')}`)
+    return Buffer.from(data, 'base64')
   } finally {
     await chrome.close()
   }
 }
 
+function write(file, data) {
+  const path = join(ROOT, file)
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, data)
+  console.log(`wrote ${file}`)
+}
+
+/** Packs PNGs into one .ico; every browser that still asks for an .ico reads PNG entries. */
+function ico(images) {
+  const header = Buffer.alloc(6)
+  header.writeUInt16LE(1, 2) // type: icon
+  header.writeUInt16LE(images.length, 4)
+  let offset = header.length + 16 * images.length
+  const entries = images.map(({ size, png }) => {
+    const entry = Buffer.alloc(16)
+    entry.writeUInt8(size, 0)
+    entry.writeUInt8(size, 1)
+    entry.writeUInt16LE(1, 4) // colour planes
+    entry.writeUInt16LE(32, 6) // bits per pixel
+    entry.writeUInt32LE(png.length, 8)
+    entry.writeUInt32LE(offset, 12)
+    offset += png.length
+    return entry
+  })
+  return Buffer.concat([header, ...entries, ...images.map(({ png }) => png)])
+}
+
+const favicons = []
+for (const size of [16, 32, 48]) favicons.push({ size, png: await capture(iconPage(icon, size), size, size) })
+write('src/assets/favicon.ico', ico(favicons))
+
 const icons = [
+  ['src/assets/apple-touch-icon.png', fullBleed, 180],
   ['public/icons/icon-192.png', icon, 192],
   ['public/icons/icon-512.png', icon, 512],
   ['public/icons/icon-maskable-512.png', maskable, 512],
-  ['public/icons/apple-touch-icon.png', fullBleed, 180],
 ]
-for (const [file, svg, size] of icons) await render(iconPage(svg, size), size, size, join(ROOT, file))
+for (const [file, svg, size] of icons) write(file, await capture(iconPage(svg, size), size, size))
 
 const poster = readFileSync(join(ROOT, 'public/media/screenshot-en-dark.webp'))
-await render(sharePage(dataUrl('image/webp', poster), icon), 1200, 630, join(ROOT, 'public/og-image.png'))
+write('public/og-image.png', await capture(sharePage(dataUrl('image/webp', poster), icon), 1200, 630))
 process.exit(0)

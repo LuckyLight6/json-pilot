@@ -2,10 +2,13 @@
  * The service worker, written to dist/sw.js by scripts/service-worker.mjs,
  * which fills in BUILD. Its job is to make the second visit free:
  *
- * - Hashed build assets (scripts, styles, workers, fonts) never change under
- *   the same name, so they are served from the cache once fetched. GitHub
- *   Pages only lets browsers cache for ten minutes, so without this every
- *   visit downloaded the 850 kB editor again.
+ * - Hashed build assets (scripts, styles, workers, fonts, icons) never change
+ *   under the same name, so they are served from the cache once fetched.
+ *   GitHub Pages only lets browsers cache for ten minutes, so without this
+ *   every visit downloaded the 850 kB editor again.
+ * - Files that keep their name when they change — the film posters, the
+ *   install icons — are served from the cache too, but fetched again behind
+ *   it, so the next visit sees a new version.
  * - Pages go to the network first, so a deploy shows up at once, and fall back
  *   to the cache when the network is down or too slow.
  * - The product site can ask it to fetch the editor while the visitor reads
@@ -26,8 +29,8 @@ const root = new URL('./', self.location).href
 /** Downloads in progress, so a page asking for a file the warm-up is already fetching shares that download. */
 const downloads = new Map()
 const warmUp = { wanted: false, held: false, running: null, controller: null }
-const isAsset = (url) =>
-  url.startsWith(`${root}assets/`) || url.startsWith(`${root}icons/`) || /\/media\/[^/]+\.webp$/.test(url)
+const isHashed = (url) => url.startsWith(`${root}assets/`)
+const isRefreshed = (url) => url.startsWith(`${root}icons/`) || /\/media\/[^/]+\.webp$/.test(url)
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
@@ -36,7 +39,8 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   if (request.method !== 'GET' || !request.url.startsWith(root)) return
   if (request.mode === 'navigate') event.respondWith(page(request))
-  else if (isAsset(request.url)) event.respondWith(asset(request))
+  else if (isHashed(request.url)) event.respondWith(asset(request))
+  else if (isRefreshed(request.url)) event.respondWith(refreshed(event))
 })
 
 self.addEventListener('message', (event) => {
@@ -59,6 +63,16 @@ async function asset(request) {
     // The warm-up's download was called off; fetch the file for this page.
     return fetch(request)
   }
+}
+
+/** Answers from the cache when it can, and updates the cached copy either way. */
+async function refreshed(event) {
+  const cache = await caches.open(ASSETS)
+  const cached = await cache.match(event.request.url)
+  const network = download(cache, event.request.url)
+  if (!cached) return (await network).clone()
+  event.waitUntil(network.catch(() => {}))
+  return cached
 }
 
 /** Fetches a file into the cache, joining a download of it already under way. */

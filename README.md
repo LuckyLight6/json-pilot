@@ -200,7 +200,7 @@ scripts/
 └── render-assets.mjs           # Renders public/icons/* and public/og-image.png
 public/
 ├── media/                      # Intro film, posters and editor screenshots
-├── icons/                      # Touch and install icons, rendered from src/assets/icon.svg
+├── icons/                      # Install icons for the web manifest, rendered from src/assets/icon.svg
 ├── manifest.webmanifest        # Lets browsers install JSON Pilot as an app
 └── og-image.png                # Social share card
 src/
