@@ -145,7 +145,7 @@ Monaco 是体积最大的依赖，因此编辑器的设计原则是：永远不�
 - **Monaco 懒加载。** 除 [`components/monaco/`](src/components/monaco/) 外没有任何运行时导入；store 在第一个编辑器挂载时才拿到 API。顶栏、标签页、查询栏和空状态先渲染，编辑器随后加载，期间显示进度条
 - **官网从不加载编辑器。** 官网与编辑器是两个独立入口，只共享 React 与基础 UI 组件
 - **官网只靠 HTML 就能显示。** 构建时把页面按中英文各预渲染一份（[`prerender.mjs`](scripts/prerender.mjs)），并把两个页面的 CSS 内联，首屏只需一个请求；脚本随后接管同样的内容，看不出任何变化
-- **再次访问无需下载。** Service Worker（[`service-worker.js`](scripts/service-worker.js)）从缓存提供带哈希的构建文件——GitHub Pages 只允许浏览器缓存十分钟——页面则优先走网络，断网或网速太慢时回退到缓存
+- **再次访问无需下载。** 带哈希的构建文件缓存一年（[`_headers`](public/_headers)），Service Worker（[`service-worker.js`](scripts/service-worker.js)）也从自己的缓存提供这些文件；页面则优先走网络，断网或网速太慢时回退到缓存
 - **官网提前加载编辑器。** 官网加载几秒后，Service Worker 会逐个下载编辑器的文件，从官网打开编辑器即可秒开。开启省流量或处于 2G 网络时不预加载；介绍片播放期间也会暂停，以免两者互相抢带宽
 - **慢速网络下视频也能流畅播放。** 小屏幕和慢速网络播放介绍片的轻量版，高清版卡顿时中途切换（见[介绍片](#介绍片)）
 - **变换保持线性复杂度。** 压缩 1 MB 文档约 50 ms；此前每遇到一个空白符号就重建一次整个字符串，需要约 18 秒
@@ -176,8 +176,12 @@ Monaco 是体积最大的依赖，因此编辑器的设计原则是：永远不�
 
 ## 部署
 
-本项目是纯静态站点。[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 会依次执行 lint、测试、构建，
-手动触发时把 `dist/` 发布到 GitHub Pages。资源路径均为相对路径，可部署在任意子路径下。
+本项目是纯静态站点，以静态资源的形式部署在 Cloudflare Workers 上（[`wrangler.jsonc`](wrangler.jsonc)）；
+另有几行 Worker 代码（[`worker/index.js`](worker/index.js)）响应介绍片的 Range 请求——Cloudflare 的静态资源服务会忽略它，而 Safari 必须靠它才能播放视频。
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 会依次执行 lint、测试、构建，手动触发时部署 `dist/`；
+需要在仓库中配置 `CLOUDFLARE_API_TOKEN`（用 “Edit Cloudflare Workers” 模板创建的 API 令牌）和
+`CLOUDFLARE_ACCOUNT_ID` 两个 secret。手动部署：`pnpm build && pnpm dlx wrangler@4 deploy`。
+资源路径均为相对路径，也可部署在任意子路径下。
 
 ## 参与贡献
 

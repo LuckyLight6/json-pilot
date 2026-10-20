@@ -1,0 +1,6 @@
+# Response headers for Cloudflare's static-asset serving (see wrangler.jsonc).
+# Everything else keeps the default: revalidate on every use, by ETag.
+
+# Hashed build files never change under the same name.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

@@ -64,8 +64,8 @@ const FPS = 30
  *   lossless — at about 2.8 Mb/s, little more than half of what a 5 Mb/s
  *   variable-bitrate encode needed for a worse worst frame (44.7 dB).
  * - sd: a third of the pixels at 27, about 1 Mb/s, so it streams where HD
- *   would stall (GitHub Pages can manage as little as 1.5 Mb/s from mainland
- *   China) and still looks sharp on phones and standard-density screens.
+ *   would stall (from mainland China the site can get as little as
+ *   1.5 Mb/s) and still looks sharp on phones and standard-density screens.
  */
 const RENDITIONS = [
   { name: 'hd', suffix: '', width: WIDTH, height: HEIGHT, quantizer: 26 },

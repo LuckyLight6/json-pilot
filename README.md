@@ -159,7 +159,7 @@ Monaco is by far the largest dependency, so the editor is built to never wait fo
 - **Monaco loads lazily.** Nothing outside [`components/monaco/`](src/components/monaco/) imports it at runtime; the store receives the API when the first editor mounts. The header, tabs, query bar and empty state paint first, and the editor streams in behind a loading bar
 - **The site never loads the editor.** The product site and the editor are separate entries that share only React and the UI primitives
 - **The site paints from its HTML alone.** The build renders the page in both languages ([`prerender.mjs`](scripts/prerender.mjs)) and inlines both pages' CSS, so the first screen needs a single request; the script then takes over the same markup without a visible change
-- **Second visits download nothing.** A service worker ([`service-worker.js`](scripts/service-worker.js)) serves the hashed build files from its cache — GitHub Pages lets browsers cache for only ten minutes — and fetches pages network-first, falling back to the cache when the link is down or slow
+- **Second visits download nothing.** Hashed build files are cached for a year ([`_headers`](public/_headers)), and a service worker ([`service-worker.js`](scripts/service-worker.js)) serves them from its own cache too, fetches pages network-first and falls back to the cache when the link is down or slow
 - **The site warms the editor.** A few seconds after the site loads, the service worker fetches the editor's files one at a time, so opening the editor from the site is instant. It skips this on Save-Data or 2G connections, and holds off while the intro film plays so the two never starve each other
 - **The film streams on slow links.** On small screens and slow links the site plays the film's SD rendition, and switches to it mid-film if HD stalls (see [The intro film](#the-intro-film))
 - **Transforms stay linear.** Minifying a 1 MB document takes about 50 ms; it used to rebuild the string once per whitespace token and took about 18 s
@@ -188,6 +188,8 @@ The service worker, the film's SD rendition and the slimmer Monaco came after th
 ```
 index.html                      # Product site entry (/)
 app/index.html                  # Editor entry (/app/)
+wrangler.jsonc                  # Cloudflare deployment: static assets plus the Worker below
+worker/index.js                 # Answers Range requests for the films
 scripts/
 ├── chrome.mjs                  # Tiny headless-Chrome driver shared by the scripts
 ├── promo/                      # The intro film: timeline, styles, soundtrack, encoders
@@ -201,6 +203,7 @@ scripts/
 public/
 ├── media/                      # Intro film, posters and editor screenshots
 ├── icons/                      # Install icons for the web manifest, rendered from src/assets/icon.svg
+├── _headers                    # Cache headers for Cloudflare: hashed files are kept for a year
 ├── manifest.webmanifest        # Lets browsers install JSON Pilot as an app
 └── og-image.png                # Social share card
 src/
@@ -243,9 +246,15 @@ Terminology and conventions used across the code live in [CONTEXT.md](CONTEXT.md
 
 ## Deployment
 
-The site is static. [`.github/workflows/ci.yml`](.github/workflows/ci.yml) lints,
-tests and builds, then publishes `dist/` to GitHub Pages when run manually.
-Asset URLs are relative, so the build works from any sub-path.
+The site is static and served by Cloudflare Workers as static assets
+([`wrangler.jsonc`](wrangler.jsonc)); a few lines of Worker code
+([`worker/index.js`](worker/index.js)) answer the films' Range requests, which
+Cloudflare's asset server ignores and Safari needs. [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+lints, tests and builds, then deploys `dist/` when run manually; it needs the
+repository secrets `CLOUDFLARE_API_TOKEN` (an API token from the "Edit
+Cloudflare Workers" template) and `CLOUDFLARE_ACCOUNT_ID`. To deploy by hand:
+`pnpm build && pnpm dlx wrangler@4 deploy`. Asset URLs are relative, so the
+build also works from any sub-path.
 
 ## Contributing
 

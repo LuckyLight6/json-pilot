@@ -3,8 +3,8 @@ import { readPreference, writePreference } from '@/lib/local-preference'
 /**
  * Each intro film comes in two renditions (see scripts/render-promo.mjs): HD,
  * 2240×1400 at about 2.8 Mb/s, for retina screens, and SD, 1280×800 at about
- * 1 Mb/s, which streams where HD would stall — GitHub Pages can manage as
- * little as 1.5 Mb/s from mainland China.
+ * 1 Mb/s, which streams where HD would stall — from mainland China the site
+ * can get as little as 1.5 Mb/s.
  */
 export type Rendition = 'hd' | 'sd'
 

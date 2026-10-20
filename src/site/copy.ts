@@ -248,5 +248,5 @@ export const SITE_COPY: Record<Locale, SiteCopy> = { en, 'zh-CN': zhCN }
 
 export const REPOSITORY_URL = 'https://github.com/LuckyLight6/json-pilot'
 
-/** Relative, so the link works from the Pages sub-path and from `vite dev`. */
+/** Relative, so the link works from any host or sub-path and from `vite dev`. */
 export const APP_URL = './app/'

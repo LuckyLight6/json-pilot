@@ -42,8 +42,7 @@ export const vendorChunkForModule = (id: string): string | undefined => {
 
 // https://vite.dev/config/
 export default defineConfig({
-  // Relative asset URLs so the build works from any sub-path, including the
-  // GitHub Pages project site at /json-pilot/.
+  // Relative asset URLs so the build works from any host or sub-path.
   base: './',
   // `/` is the product site, `/app/` the editor. `vite dev` serves both.
   plugins: [react(), tailwindcss()],

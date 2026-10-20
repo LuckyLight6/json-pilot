@@ -7,7 +7,7 @@ import importPlugin from 'eslint-plugin-import'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config([
-  { ignores: ['dist', '.pnpm-store'] },
+  { ignores: ['dist', '.pnpm-store', '.wrangler'] },
   {
     // Node-side tooling such as scripts/render-promo.mjs.
     files: ['**/*.{js,mjs}'],
@@ -25,6 +25,11 @@ export default tseslint.config([
   },
   {
     files: ['scripts/service-worker.js'],
+    languageOptions: { globals: globals.serviceworker },
+  },
+  {
+    // The Cloudflare Worker (wrangler.jsonc) runs on the same web APIs.
+    files: ['worker/**/*.js'],
     languageOptions: { globals: globals.serviceworker },
   },
   {

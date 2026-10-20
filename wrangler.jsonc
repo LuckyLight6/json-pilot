@@ -1,0 +1,20 @@
+// Cloudflare Workers configuration: the site is served as static assets, and
+// a small script answers Range requests for the films. CI deploys it
+// (.github/workflows/ci.yml); by hand: `pnpm build && pnpm dlx wrangler@4 deploy`.
+{
+  "name": "json-pilot",
+  "compatibility_date": "2026-10-20",
+  "main": "./worker/index.js",
+  "assets": {
+    "directory": "./dist/",
+    "binding": "ASSETS",
+    // /app redirects to /app/, which serves app/index.html.
+    "html_handling": "auto-trailing-slash",
+    // Everything else never reaches the script.
+    "run_worker_first": ["/media/*.mp4"],
+  },
+  // Deploying creates the DNS record and certificate for the hostname. The
+  // workers.dev address stays off: it is unreachable from mainland China.
+  "routes": [{ "pattern": "json-pilot.luckylight6.com", "custom_domain": true }],
+  "workers_dev": false,
+}

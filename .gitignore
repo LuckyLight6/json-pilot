@@ -12,6 +12,8 @@ build/
 *.tsbuildinfo
 .eslintcache
 .cache/
+# Wrangler's local state
+.wrangler/
 # Written next to the config while Vite bundles it, and left behind on a crash.
 vite.config.*.timestamp-*
 

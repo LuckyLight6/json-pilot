@@ -3,9 +3,9 @@
  * which fills in BUILD. Its job is to make the second visit free:
  *
  * - Hashed build assets (scripts, styles, workers, fonts, icons) never change
- *   under the same name, so they are served from the cache once fetched.
- *   GitHub Pages only lets browsers cache for ten minutes, so without this
- *   every visit downloaded the 850 kB editor again.
+ *   under the same name, so they are served from the cache once fetched —
+ *   including the editor's, which the site fetches ahead (below) and which
+ *   the browser's own cache would hold only if the editor had been opened.
  * - Files that keep their name when they change — the film posters, the
  *   install icons — are served from the cache too, but fetched again behind
  *   it, so the next visit sees a new version.
