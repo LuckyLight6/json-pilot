@@ -1,0 +1,11 @@
+# Command-line tools this project needs besides Node and pnpm. `mise install`
+# installs them; CI does the same (.github/workflows/ci.yml).
+
+[tool_alias]
+# Cloudflare's CLI, which deploys the site (wrangler.jsonc). It comes from npm.
+wrangler = "npm:wrangler"
+
+[tools]
+# allow_builds: its dependencies (workerd, esbuild) fetch their binaries in
+# install scripts.
+wrangler = { version = "4.151.2", allow_builds = true }

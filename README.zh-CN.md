@@ -180,7 +180,8 @@ Monaco 是体积最大的依赖，因此编辑器的设计原则是：永远不�
 另有几行 Worker 代码（[`worker/index.js`](worker/index.js)）响应介绍片的 Range 请求——Cloudflare 的静态资源服务会忽略它，而 Safari 必须靠它才能播放视频。
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 会依次执行 lint、测试、构建，手动触发时部署 `dist/`；
 需要在仓库中配置 `CLOUDFLARE_API_TOKEN`（用 “Edit Cloudflare Workers” 模板创建的 API 令牌）和
-`CLOUDFLARE_ACCOUNT_ID` 两个 secret。手动部署：`pnpm build && pnpm dlx wrangler@4 deploy`。
+`CLOUDFLARE_ACCOUNT_ID` 两个 secret。手动部署：先用 `mise install` 安装 Wrangler（[`mise.toml`](mise.toml)），
+`wrangler login` 登录一次，再执行 `pnpm build && wrangler deploy`。
 资源路径均为相对路径，也可部署在任意子路径下。
 
 ## 参与贡献

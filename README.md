@@ -189,6 +189,7 @@ The service worker, the film's SD rendition and the slimmer Monaco came after th
 index.html                      # Product site entry (/)
 app/index.html                  # Editor entry (/app/)
 wrangler.jsonc                  # Cloudflare deployment: static assets plus the Worker below
+mise.toml                       # Command-line tools beyond Node and pnpm: Wrangler
 worker/index.js                 # Answers Range requests for the films
 scripts/
 ├── chrome.mjs                  # Tiny headless-Chrome driver shared by the scripts
@@ -252,9 +253,10 @@ The site is static and served by Cloudflare Workers as static assets
 Cloudflare's asset server ignores and Safari needs. [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 lints, tests and builds, then deploys `dist/` when run manually; it needs the
 repository secrets `CLOUDFLARE_API_TOKEN` (an API token from the "Edit
-Cloudflare Workers" template) and `CLOUDFLARE_ACCOUNT_ID`. To deploy by hand:
-`pnpm build && pnpm dlx wrangler@4 deploy`. Asset URLs are relative, so the
-build also works from any sub-path.
+Cloudflare Workers" template) and `CLOUDFLARE_ACCOUNT_ID`. To deploy by hand,
+install Wrangler with `mise install` ([`mise.toml`](mise.toml)), sign in once
+with `wrangler login`, then run `pnpm build && wrangler deploy`. Asset URLs are
+relative, so the build also works from any sub-path.
 
 ## Contributing
 

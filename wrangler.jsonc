@@ -1,6 +1,7 @@
 // Cloudflare Workers configuration: the site is served as static assets, and
 // a small script answers Range requests for the films. CI deploys it
-// (.github/workflows/ci.yml); by hand: `pnpm build && pnpm dlx wrangler@4 deploy`.
+// (.github/workflows/ci.yml); by hand: `pnpm build && wrangler deploy`, with
+// Wrangler installed by `mise install` (mise.toml).
 {
   "name": "json-pilot",
   "compatibility_date": "2026-10-20",
